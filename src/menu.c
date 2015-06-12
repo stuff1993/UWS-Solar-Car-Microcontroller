@@ -14,14 +14,24 @@
 extern MOTORCONTROLLER ESC1, ESC2;
 extern MPPT MPPT1, MPPT2;
 extern CAN_MSG MsgBuf_TX1;
-extern volatile uint16_t PWMA, PWMC;
+extern volatile uint16_t PWMA, PWMC; // TODO: remove
 extern uint16_t PWMBL;
 extern uint16_t THR_POS, RGN_POS;
 
 
 //////////////////////////////////////////////
 /// Not in array, reference manually
-void displayERRORonSTART(void)
+
+/******************************************************************************
+** Function name:		displayERRORonSTART
+**
+** Description:			Error screen on boot
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayERRORonSTART (void)
 {
 	lcd_putstring(0,0, "--    CAUTION!    --");
 	lcd_putstring(1,0, "                    ");
@@ -29,7 +39,16 @@ void displayERRORonSTART(void)
 	lcd_putstring(3,0, "                    ");
 }
 
-void displayINTRO(void)
+/******************************************************************************
+** Function name:		displayINTRO
+**
+** Description:			Boot intro screen
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayINTRO (void)
 {
 	lcd_putstring(0,0, "**  UWS WSC 2015  **");
 	lcd_putstring(1,0, "                    ");
@@ -50,7 +69,17 @@ void displayINTRO(void)
 
 ///////////////////////////////////////////////
 /// menus array
-void displayINFO(void) // menus[0]
+
+/******************************************************************************
+** Function name:		displayINFO
+**
+** Description:			Car information screen
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayINFO (void) // menus[0]
 {
 	char buffer[20];
 
@@ -67,7 +96,16 @@ void displayINFO(void) // menus[0]
 	lcd_putstring(3,0, buffer);
 }
 
-void displayBUSDATA(void) // menus[1]
+/******************************************************************************
+** Function name:		displayBUSDATA
+**
+** Description:			Data screen for precharge
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayBUSDATA (void) // menus[1]
 {// TODO: CHANGE TO CONTROL PRECHARGE
 	char buffer[20];
 
@@ -92,7 +130,16 @@ void displayBUSDATA(void) // menus[1]
 	}
 }
 
-void displayHOME(void) // menus[2]
+/******************************************************************************
+** Function name:		displayHOME
+**
+** Description:			Speed, drive, array power, basic errors
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayHOME (void) // menus[2]
 {
 	char buffer[20];
 
@@ -165,7 +212,16 @@ void displayHOME(void) // menus[2]
 	}
 }
 
-void displayDRIVE(void) // menus[3]
+/******************************************************************************
+** Function name:		displayDRIVE
+**
+** Description:			Drive details screen
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayDRIVE (void) // menus[3]
 {
 	char buffer[20];
 
@@ -203,7 +259,16 @@ void displayDRIVE(void) // menus[3]
 	}
 }
 
-void displayCRUISE(void) // menus[4]
+/******************************************************************************
+** Function name:		displayCRUISE
+**
+** Description:			Cruise control screen
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayCRUISE (void) // menus[4]
 {// TODO: MAJOR REWORK FOR WS CRUISE
 	char buffer[20];
 
@@ -674,6 +739,15 @@ void displayCRUISE(void) // menus[4]
 	}
 }
 
+/******************************************************************************
+** Function name:		displayMPPT1
+**
+** Description:			MPPT1 information screen
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
 void displayMPPT1(void) // menus[5]
 {
 	char buffer[20];
@@ -775,6 +849,15 @@ void displayMPPT1(void) // menus[5]
 	}
 }
 
+/******************************************************************************
+** Function name:		displayMPPT2
+**
+** Description:			MPPT2 information screen
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
 void displayMPPT2(void) // menus[6]
 {
 	char buffer[20];
@@ -877,7 +960,16 @@ void displayMPPT2(void) // menus[6]
 	}
 }
 
-void displayMPPT_MAH(void) // menus[7]
+/******************************************************************************
+** Function name:		displayMPPT_MAH
+**
+** Description:			Total power from MPPTs
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayMPPT_MAH (void) // menus[7]
 {
 	char buffer[20];
 
@@ -901,7 +993,16 @@ void displayMPPT_MAH(void) // menus[7]
 	}
 }
 
-void displayMOTOR(void) // menus[8]
+/******************************************************************************
+** Function name:		displayMOTOR
+**
+** Description:			Motor stats screens
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayMOTOR (void) // menus[8]
 {
 	char buffer[20];
 
@@ -961,7 +1062,16 @@ void displayMOTOR(void) // menus[8]
 	else if(DECREMENT){MENU.SUBMENU_POS--;}
 }
 
-void displayDEBUG(void) // menus[9]
+/******************************************************************************
+** Function name:		displayDEBUG
+**
+** Description:			Bus debug screen
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayDEBUG (void) // menus[9]
 {
 	char buffer[20];
 
@@ -984,7 +1094,16 @@ void displayDEBUG(void) // menus[9]
 	}
 }
 
-void displayERRORS(void) // menus[10]
+/******************************************************************************
+** Function name:		displayERRORS
+**
+** Description:			Error display screen
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayERRORS (void) // menus[10]
 {
 	char buffer[20];
 
@@ -1056,8 +1175,19 @@ void displayERRORS(void) // menus[10]
 	}
 }
 
-void displayOTHER(void) // menus[11]
+/******************************************************************************
+** Function name:		displayOTHER
+**
+** Description:			Other options on this screen.
+** 						Buzzer and backlight settings
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayOTHER (void) // menus[11]
 {
+	// TODO: Update DUTYBL here instead of drive routine
 	char buffer[20];
 
 	sprintf(buffer, "-OTHER-");
@@ -1168,7 +1298,18 @@ void displayOTHER(void) // menus[11]
 	}
 }
 
-void displayPEAKS(void) // menus[12]
+/******************************************************************************
+** Function name:		displayPEAKS
+**
+** Description:			Car peaks screen
+** 						1. Array power
+** 						2. Top speed
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayPEAKS (void) // menus[12]
 {
 	char buffer[20];
 
@@ -1190,7 +1331,16 @@ void displayPEAKS(void) // menus[12]
 	}
 }
 
-void displayRUNTIME(void) // menus[13]
+/******************************************************************************
+** Function name:		displayRUNTIME
+**
+** Description:			Displays car's current runtime
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayRUNTIME (void) // menus[13]
 {
 	char buffer[20];
 
@@ -1204,7 +1354,16 @@ void displayRUNTIME(void) // menus[13]
 	lcd_putstring(3,12, buffer);
 }
 
-void displayODOMETER(void) // menus[14]
+/******************************************************************************
+** Function name:		displayODOMETER
+**
+** Description:			Display's odometer
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayODOMETER (void) // menus[14]
 {// TODO: ESC ODO
 	char buffer[20];
 
@@ -1228,7 +1387,17 @@ void displayODOMETER(void) // menus[14]
 
 ///////////////////////////////////////////////
 /// errors array
-void displaySWOC(void) // errors[0]
+
+/******************************************************************************
+** Function name:		displaySWOC
+**
+** Description:			Display screen for SWOC error
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displaySWOC (void) // errors[0]
 {
 	char buffer[20];
 
@@ -1265,7 +1434,16 @@ void displaySWOC(void) // errors[0]
 	}
 }
 
-void displayHWOC(void) // errors[1]
+/******************************************************************************
+** Function name:		displayHWOC
+**
+** Description:			Display screen for HWOC error
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void displayHWOC (void) // errors[1]
 {// TODO: ADD RESET??
 	char buffer[20];
 
@@ -1293,7 +1471,17 @@ void displayHWOC(void) // errors[1]
 }
 ///////////////////////////////////////////////
 
-void _lcd_putTitle(char *_title)
+/******************************************************************************
+** Function name:		_lcd_putTitle
+**
+** Description:			Used place the screen title and current car speed on
+** 						top line of LCD
+**
+** Parameters:			1. Address of char array with title string (10 character max)
+** Returned value:		None
+**
+******************************************************************************/
+void _lcd_putTitle (char *_title)
 {
 	// displays first 10 chars of _title and current speed at (0,0) on lcd screen
 	char buffer[20];
@@ -1322,6 +1510,15 @@ void _lcd_putTitle(char *_title)
 	lcd_putstring(0, 0, buffer);
 }
 
+/******************************************************************************
+** Function name:		menuInit
+**
+** Description:			Initialize menu arrays
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
 void menuInit (void)
 {
 	MENU.errors[0] = SWOC;

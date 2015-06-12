@@ -167,7 +167,7 @@ typedef struct // MOTORCONTROLLER
 #endif // MC_PEAKS
 }MOTORCONTROLLER;
 
-struct BMU
+struct // BMU
 {
 	/// Predetermined Values
 	uint32_t CAN_ID;				// CAN Bus Identifier
@@ -257,20 +257,29 @@ struct BMU
 #if _BMU_PEAKS
 	uint32_t MAX_Battery_I;
 #endif // _BMU_PEKAS
-}BMU1;
+}BMU;
 
-struct CAR_STATS
+struct // STATS
 {
 	int RAMP_SPEED;
 	float ODOMETER;
 	float ODOMETER_REV;
 	float MAX_SPEED;
+	float CRUISE_SPEED;
 	FLAG(DRIVE_MODE)
 	FLAG(BUZZER)
 	FLAG(MPPT_POLL_COUNT)
 	FLAG(SWOC_ACK)
 	FLAG(HWOC_ACK)
+	FLAG(CR_ACT)
+	FLAG(CR_STS)
 }STATS;
+
+struct // DRIVE
+{
+	float Speed_RPM;
+	float Current;
+}DRIVE;
 
 struct MENUS
 {
