@@ -175,7 +175,7 @@ struct // BMU
 	/// From CAN Bus
 	uint32_t SERIAL_NO;				// BMU Serial Number
 	uint32_t Battery_V;				// Battery Voltage
-	uint32_t Battery_I;				// Battery Output Current
+	int32_t Battery_I;				// Battery Output Current
 	uint32_t Status;				// Status Flags
 #if _BMU_SOC == 1
 	float SOC;						// Battery State of Charge (0 = Full)
@@ -208,18 +208,18 @@ struct // BMU
 	uint8_t Precharge_Timer;
 #endif // _BMU_PRECHARGE
 #if _BMU_CELL_V
-	uint16_t Min_Cell_V;
-	uint16_t Max_Cell_V;
-	uint8_t CMU_Min_V;
-	uint8_t CMU_Max_V;
-	uint8_t Cell_Min_V;
-	uint8_t Cell_Max_V;
+	uint16_t Min_Cell_V; 	// Minimum Cell Voltage
+	uint16_t Max_Cell_V; 	// Maximum Cell Voltage
+	uint8_t CMU_Min_V;		// CMU number with minimum cell voltage
+	uint8_t CMU_Max_V;		// CMU number with maximum cell voltage
+	uint8_t Cell_Min_V;		// Cell number with minimum cell voltage
+	uint8_t Cell_Max_V;		// Cell number with maximum cell voltage
 #endif // _BMU_CELL_V
 #if _BMU_CMU_TMP
-	uint16_t Min_CMU_Tmp;
-	uint16_t Max_CMU_Tmp;
-	uint8_t CMU_Min_Tmp;
-	uint8_t CMU_Max_Tmp;
+	uint16_t Min_Cell_Tmp;	// Minimum Cell Temperature
+	uint16_t Max_Cell_Tmp;	// Maximum Cell Temperature
+	uint8_t CMU_Min_Tmp;	// CMU number with minimum cell temperature
+	uint8_t CMU_Max_Tmp;	// CMU number with maximum cell temperature
 #endif // _BMU_CMU_TMP
 #if _BMU_BAL_THRES
 	uint16_t Bal_Thres_Rising;
@@ -229,7 +229,7 @@ struct // BMU
 	uint8_t CMU_Count;
 #endif // _BMU_CMU_CNT
 #if _BMU_VER
-	uint16_t BUM_FW_Ver;
+	uint16_t BMU_FW_Ver;
 	uint8_t BMU_HW_Ver;
 	uint8_t BMU_Model_ID;
 #endif // _BMU_VER

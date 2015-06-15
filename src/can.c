@@ -9,6 +9,7 @@
 #include "can.h"
 #include "dash.h"
 #include "struct.h"
+#include "inttofloat.h"
 
 extern CAN_MSG MsgBuf_RX1, MsgBuf_RX2;
 extern CAN_MSG MsgBuf_TX1, MsgBuf_TX2;
@@ -59,7 +60,7 @@ void CAN_ISR_Rx1( void )
 	ESC.ERROR = (MsgBuf_RX1.DataA >> 16);
 #endif
 #if _MC_LIM
-	ESC.LIMIT = (MsgBuf_RX1.DataA);
+	ESC.LIMIT = (MsgBuf_RX1.DataA & 0xFFFF);
 #endif
 	break;
 	case ESC_BASE + 2:
@@ -164,33 +165,103 @@ void CAN_ISR_Rx1( void )
 	break;
 
 	case BMU_BASE:
-		BMU1.SERIAL_NO = MsgBuf_RX1.DataB;
+		BMU.SERIAL_NO = MsgBuf_RX1.DataA;
 		break;
 
 	case BMU_BASE + BMU_INFO:
-	BMU1.SOC = MsgBuf_RX1.DataB;
-	BMU1.SOC_PER = MsgBuf_RX1.DataA;
+#if _BMU_SOC == 1
+	BMU.SOC = convertToFloat(MsgBuf_RX1.DataB);
+#elif _BMU_SOC == 2
+	BMU.SOC_PER = convertToFloat(MsgBuf_RX1.DataA);
+#elif _BMU_SOC == 3
+	BMU.SOC = convertToFloat(MsgBuf_RX1.DataB);
+	BMU.SOC_PER = convertToFloat(MsgBuf_RX1.DataA);
+#endif
 	break;
 	case BMU_BASE + BMU_INFO + 1:
-	BMU1.BAL_SOC = MsgBuf_RX1.DataB;
-	BMU1.BAL_SOC_PER = MsgBuf_RX1.DataA;
+#if _BMU_BAL_SOC == 1
+	BMU.BAL_SOC = convertToFloat(MsgBuf_RX1.DataB);
+#elif _BMU_BAL_SOC == 2
+	BMU.BAL_SOC_PER = convertToFloat(MsgBuf_RX1.DataA);
+#elif _BMU_BAL_SOC == 3
+	BMU.BAL_SOC = convertToFloat(MsgBuf_RX1.DataB);
+	BMU.BAL_SOC_PER = convertToFloat(MsgBuf_RX1.DataA);
+#endif
 	break;
 	case BMU_BASE + BMU_INFO + 2:
-	BMU1.Charge_Cell_V_Err = (MsgBuf_RX1.DataB) >> 16;
+#if _BMU_THRES
+	BMU.Charge_Cell_V_Err = MsgBuf_RX1.DataB >> 16;
+	BMU.Cell_Tmp_Margin = MsgBuf_RX1.DataB & 0xFFFF;
+	BMU.Discharge_Cell_V_Err = MsgBuf_RX1.DataA >> 16;
+#endif
+#if _BMU_CAP
+	BMU.Pack_Capacity = MsgBuf_RX1.DataA & 0xFFFF;
+#endif
 	break;
 	case BMU_BASE + BMU_INFO + 3:
+#if _BMU_PRECHARGE
+	BMU.Driver_Status = MsgBuf_RX1.DataB >> 24;
+	BMU.Precharge_Status = (MsgBuf_RX1.DataB >> 16) & 0xFF;
+	if ((MsgBuf_RX1.DataA >> 8) & 0xFF)	{BMU.Precharge_Time_Elapsed = TRUE;}
+	else								{BMU.Precharge_Time_Elapsed = FALSE;}
+	BMU.Precharge_Timer = MsgBuf_RX1.DataA & 0xFF;
+#endif
 	break;
 	case BMU_BASE + BMU_INFO + 4:
+#if _BMU_CELL_V
+	BMU.Min_Cell_V = (MsgBuf_RX1.DataB >> 16) & 0xFFFF;
+	BMU.Max_Cell_V = MsgBuf_RX1.DataB & 0xFFFF;
+	BMU.CMU_Min_V = (MsgBuf_RX1.DataA >> 24) & 0xFF;
+	BMU.CMU_Max_V = (MsgBuf_RX1.DataA >> 8) & 0xFF;
+	BMU.Cell_Min_V = (MsgBuf_RX1.DataA >> 16) & 0xFF;
+	BMU.Cell_Max_V = MsgBuf_RX1.DataA & 0xFF;
+#endif
 	break;
 	case BMU_BASE + BMU_INFO + 5:
+#if _BMU_CMU_TMP
+	BMU.Max_Cell_Tmp = (MsgBuf_RX1.DataB >> 16) & 0xFFFF;
+	BMU.Max_Cell_Tmp = MsgBuf_RX1.DataB & 0xFFFF;
+	BMU.CMU_Min_Tmp = (MsgBuf_RX1.DataA >> 24) & 0xFF;
+	BMU.CMU_Max_Tmp = (MsgBuf_RX1.DataA >> 8) & 0xFF;
+#endif
 	break;
 	case BMU_BASE + BMU_INFO + 6:
+	BMU.Battery_V = MsgBuf_RX1.DataB;
+	BMU.Battery_I = iirFILTER(MsgBuf_RX1.DataA, BMU.Battery_I);
 	break;
 	case BMU_BASE + BMU_INFO + 7:
+	// Can extract 8 Status flags here but they are also contained with others in BASE + 9
+#if _BMU_BAL_THRES
+	BMU.Bal_Thres_Rising = (MsgBuf_RX1.DataB >> 16) & 0xFFFF;
+	BMU.Bal_Thres_Falling = MsgBuf_RX1.DataB & 0xFFFF;
+#endif
+#if _BMU_CMU_CNT
+	BMU.CMU_Count = (MsgBuf_RX1.DataA >> 16) & 0xFF;
+#endif
+#if _BMU_VER
+	BMU.BMU_FW_Ver = MsgBuf_RX1.DataA & 0xFFFF;
+#endif
 	break;
 	case BMU_BASE + BMU_INFO + 8:
+#if _BMU_FAN == 1
+	BMU.Fan0_Spd = (MsgBuf_RX1.DataB >> 16) & 0xFFFF;
+#elif _BMU_FAN == 2
+	BMU.Fan1_Spd = MsgBuf_RX1.DataB & 0xFFFF;
+#elif _BMU_FAN == 3
+	BMU.Fan0_Spd = (MsgBuf_RX1.DataB >> 16) & 0xFFFF;
+	BMU.Fan1_Spd = MsgBuf_RX1.DataB & 0xFFFF;
+#endif
+#if _BMU_12V_CONSUM
+	BMU.Fan_Contactor_12V_mA = (MsgBuf_RX1.DataA >> 16) & 0xFFFF;
+	BMU.CMU_12V_mA = MsgBuf_RX1.DataA & 0xFFFF;
+#endif
 	break;
 	case BMU_BASE + BMU_INFO + 9:
+	BMU.Status = MsgBuf_RX1.DataB;
+#if _BMU_VER
+	BMU.BMU_HW_Ver = (MsgBuf_RX1.DataA >> 24) & 0xFF;
+	BMU.BMU_Model_ID = (MsgBuf_RX1.DataA >> 16) & 0xFF;
+#endif
 	break;
 
 

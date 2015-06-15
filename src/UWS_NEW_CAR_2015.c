@@ -72,10 +72,9 @@ MOTORCONTROLLER ESC;
 void BOD_IRQHandler (void)
 {
 	DUTYBL = 0;
-	LPC_PWM1->LER = LER1_EN | LER2_EN | LER3_EN | LER6_EN;
+	LPC_PWM1->LER = LER6_EN;
 
-	//writeDATA(ADDRESS1, PWMBL);					// writes the BL to flash location
-	REVERSE_ON;NEUTRAL_ON;REGEN_ON;DRIVE_ON;	// write complete
+	REVERSE_ON;NEUTRAL_ON;REGEN_ON;DRIVE_ON;
 }
 
 /******************************************************************************
@@ -280,7 +279,7 @@ void checkBUTTONS (void)
 	if(RIGHT)
 	{
 		MENU.MENU_POS++;delayMs(1, 400);buzzer(50);
-		if(MENU.MENU_POS>MENU_ITEMS){MENU.MENU_POS = 0;}
+		if(MENU.MENU_POS>=MENU_ITEMS){MENU.MENU_POS = 0;}
 		if(MENU.MENU_POS==1){buzzer(300);}
 		if((ESC.ERROR & 0x2) && !STATS.SWOC_ACK){STATS.SWOC_ACK = TRUE;}
 		if((ESC.ERROR & 0x1) && !STATS.HWOC_ACK){STATS.HWOC_ACK = TRUE;BUZZER_OFF}
@@ -538,14 +537,13 @@ void tx500CAN (void) // TODO: Rewrite
 ******************************************************************************/
 void doCALCULATIONS (void)
 {
-	// Calculate Watts been used by the motor controller
-	ESC.Watts = (ESC.Bus_V * ESC.Bus_I);
+	// Calculate Power of components
+	ESC.Watts = ESC.Bus_V * ESC.Bus_I;
 
-	// Calculate array Watts
-	MPPT1.Watts = (MPPT1.VIn * MPPT1.IIn);
-	MPPT2.Watts = (MPPT2.VIn * MPPT2.IIn);
-	MPPT1.Watts = MPPT1.Watts/1000;
-	MPPT2.Watts = MPPT2.Watts/1000;
+	BMU.Watts = BMU.Battery_I * BMU.Battery_V;
+
+	MPPT1.Watts = (MPPT1.VIn * MPPT1.IIn) / 1000.0;
+	MPPT2.Watts = (MPPT2.VIn * MPPT2.IIn) / 1000.0;
 
 	// Check peaks
 	if(ESC.Watts > ESC.MAX_Watts){ESC.MAX_Watts = ESC.Watts;}
@@ -556,11 +554,247 @@ void doCALCULATIONS (void)
 	if(MPPT1.Watts > MPPT1.MAX_Watts){MPPT1.MAX_Watts = MPPT1.Watts;}
 	if(MPPT2.Watts > MPPT2.MAX_Watts){MPPT2.MAX_Watts = MPPT2.Watts;}
 
+	if(BMU.Watts > BMU.MAX_Watts){BMU.MAX_Watts = BMU.Watts;}
+}
 
-	// TODO: Move to CAN Receive
-	float tempcurr = (float)BMU1.BATTERY_CURRENT;
-	BMU1.BUS_CURRENT = ((tempcurr/1000) + 15*BMU1.BUS_CURRENT)/16;
-	BMU1.WATTS = BMU1.BUS_CURRENT*ESC1.BUS_VOLTAGE;
+/******************************************************************************
+** Function name:		recallVariables
+**
+** Description:			Restores persistent variables from EEPROM
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void recallVariables (void)
+{
+	// Restore Non-Volatile Data
+	STATS.BUZZER = EERead(AddressBUZZ);
+
+	if(EERead(AddressBL) < 2000){PWMBL = EERead(AddressBL);}
+	else{PWMBL = 500;EEWrite(AddressBL, PWMBL);}
+
+	STATS.ODOMETER = convertToFloat(EERead(AddressODOF));
+	STATS.ODOMETER_REV = convertToFloat(EERead(AddressODOR));
+	STATS.MAX_SPEED = 0;
+	STATS.RAMP_SPEED = 5;
+	STATS.CRUISE_SPEED = 0;
+	STATS.CR_ACT = 0;
+	STATS.CR_STS = 0;
+
+	BMU.WattHrs = convertToFloat(EERead(AddressBMUWHR));
+	MPPT1.WattHrs = convertToFloat(EERead(AddressMPPT1WHR));
+	MPPT2.WattHrs = convertToFloat(EERead(AddressMPPT2WHR));
+}
+
+/******************************************************************************
+** Function name:		storeVariables
+**
+** Description:			Saves persistent variables to EEPROM
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void storeVariables (void)
+{
+	if(CLOCK.T_S % 2)
+	{
+		EEWrite(AddressODOF, convertToUint(STATS.ODOMETER));
+		delayMs(1,3);
+		EEWrite(AddressODOR, convertToUint(STATS.ODOMETER_REV));
+		delayMs(1,3);
+	}
+
+	else
+	{
+		EEWrite(AddressBMUWHR, convertToUint(BMU.WattHrs));
+		delayMs(1,3);
+		EEWrite(AddressMPPT1WHR, convertToUint(MPPT1.WattHrs));
+		delayMs(1,3);
+		EEWrite(AddressMPPT2WHR, convertToUint(MPPT2.WattHrs));
+		delayMs(1,3);
+	}
+}
+
+/******************************************************************************
+** Function name:		EERead
+**
+** Description:			Reads a word from EEPROM (Uses I2CRead)
+**
+** Parameters:			Address to read from
+** Returned value:		Data at address
+**
+******************************************************************************/
+uint32_t EERead (uint32_t EERadd)
+{
+	uint32_t retDATA = 0;
+
+	retDATA = I2CRead(EERadd+3);
+	retDATA = (retDATA << 8) + I2CRead(EERadd+2);
+	retDATA = (retDATA << 8) + I2CRead(EERadd+1);
+	retDATA = (retDATA << 8) + I2CRead(EERadd+0);
+
+	return retDATA;
+}
+
+/******************************************************************************
+** Function name:		EEWrite
+**
+** Description:			Saves a word to EEPROM (Uses I2CWrite)
+**
+** Parameters:			1. Address to save to
+** 						2. Data to save
+** Returned value:		None
+**
+******************************************************************************/
+void EEWrite (uint32_t _EEadd, uint32_t _EEdata)
+{
+	uint32_t temp1 = (_EEdata & 0x000000FF);
+	uint32_t temp2 = (_EEdata & 0x0000FF00) >> 8;
+	uint32_t temp3 = (_EEdata & 0x00FF0000) >> 16;
+	uint32_t temp4 = (_EEdata & 0xFF000000) >> 24;
+
+	I2CWrite(_EEadd, temp1,temp2,temp3,temp4);
+}
+
+/******************************************************************************
+** Function name:		I2CRead
+**
+** Description:			Reads a byte from EEPROM
+**
+** Parameters:			Address to read from
+** Returned value:		Data at address
+**
+******************************************************************************/
+uint32_t I2CRead (uint32_t eeaddress)
+{
+	int i;
+
+	for ( i = 0; i < BUFSIZE; i++ )	  	/* clear buffer */
+	{
+		I2CMasterBuffer[PORT_USED][i] = 0;
+	}
+
+	I2CWriteLength[PORT_USED] = 3;
+	I2CReadLength[PORT_USED] = 1;
+	I2CMasterBuffer[PORT_USED][0] = _24LC256_ADDR;
+	I2CMasterBuffer[PORT_USED][1] = 0x00;	/* address */
+	I2CMasterBuffer[PORT_USED][2] = eeaddress;		/* address */
+	I2CMasterBuffer[PORT_USED][3] = _24LC256_ADDR | RD_BIT;
+	I2CEngine( PORT_USED );
+	I2CStop(PORT_USED);
+
+	return (uint32_t)I2CSlaveBuffer[PORT_USED][0];
+}
+
+/******************************************************************************
+** Function name:		I2CWrite
+**
+** Description:			Saves a byte to EEPROM
+**
+** Parameters:			1. Address to save to
+** 						2. Data to save
+** Returned value:		None
+**
+******************************************************************************/
+void I2CWrite (uint32_t eeaddress, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3)
+{
+	I2CWriteLength[PORT_USED] = 7;
+	I2CReadLength[PORT_USED] = 0;
+	I2CMasterBuffer[PORT_USED][0] = _24LC256_ADDR;
+	I2CMasterBuffer[PORT_USED][1] = 0x00;			/* address */
+	I2CMasterBuffer[PORT_USED][2] = eeaddress;	/* address */
+	I2CMasterBuffer[PORT_USED][3] = data0;
+	I2CMasterBuffer[PORT_USED][4] = data1;
+	I2CMasterBuffer[PORT_USED][5] = data2;
+	I2CMasterBuffer[PORT_USED][6] = data3;
+	I2CEngine( PORT_USED );
+
+	delayMs(1,10);
+}
+
+/******************************************************************************
+** Function name:		iirFILTER
+**
+** Description:			Filter to flatten out erratic data reads
+**
+** Parameters:			1. Input data
+** 						2. Existing data
+** 						MACRO - IIR_FILTER_GAIN - input gain
+** Returned value:		Smoothed value
+**
+******************************************************************************/
+uint32_t iirFILTER (uint32_t newDATA, uint32_t oldDATA)
+{
+	uint8_t gain = IIR_FILTER_GAIN;
+	uint32_t _ret = (((gain-1)*oldDATA)+newDATA)/gain;
+
+	return _ret;
+}
+
+/******************************************************************************
+** Function name:		setPORTS
+**
+** Description:			Configures pins to be used for GPIO
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void setPORTS (void)
+{
+	//OUTPUTS:
+	// (BUZZER)|    (LCD_RS)|(LCD_E)
+	LPC_GPIO0->FIODIR = (1<<3)|    (1<<15)|(1<<16);
+	LPC_GPIO0->FIOCLR = (1<<3)|    (1<<15)|(1<<16);
+
+	// (BRAKE_OUT)|(GEAR1)|(GEAR2)|(GEAR3)|(REVERSE)
+	LPC_GPIO1->FIODIR = (1<<21)|(1<<23)|(1<<24)|(1<<25)|(1<<26);
+	LPC_GPIO1->FIOCLR = (1<<21)|(1<<23)|(1<<24)|(1<<25)|(1<<26);
+
+	//              (LCD_BL)|(LCD_D7)|(LCD_D6)|(LCD_D5)|(LCD_D4)
+	LPC_GPIO2->FIODIR = (1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9);
+	LPC_GPIO2->FIOCLR = (1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9);
+
+	//INPUTS:
+	// CAN BUS @ PORT_0 (1<<4)|(1<<5)|(1<<21)|(1<<22)|(CAN RD2)|(CAN TD2)|(CAN_RD1)|(CAN_TD2)
+	// ANALOG_IN @ PORT_0 (1<<23)|(1<<24)|(1<<25)
+}
+
+/******************************************************************************
+** Function name:		buzzer
+**
+** Description:			Turns buzzer on for set amount of time
+**
+** Parameters:			Time to activate buzzer
+** Returned value:		None
+**
+******************************************************************************/
+void buzzer (uint32_t val)
+{
+	if(STATS.BUZZER)
+	{BUZZER_ON;}
+	delayMs(1,val);
+	BUZZER_OFF;
+}
+
+/******************************************************************************
+** Function name:		BOD_Init
+**
+** Description:			Configures BOD Handler
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void BOD_Init ( void )
+{
+	/* Turn on BOD. */
+	LPC_SC->PCON &= ~(0x1<<3);
+
+	/* Enable the BOD Interrupt */
+	NVIC_EnableIRQ(BOD_IRQn);
 }
 
 /******************************************************************************

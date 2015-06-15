@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "menu.h"
+#include "dash.h"
 
 #include "lpc17xx.h"
 
@@ -112,13 +113,13 @@ void displayBUSDATA (void) // menus[1]
 	sprintf(buffer, "-ESC BUS-");
 	_lcd_putTitle(buffer);
 
-	sprintf(buffer, "BUS VOLTAGE: %03.0f V  ", ESC1.BUS_VOLTAGE);
+	sprintf(buffer, "BUS VOLTAGE: %03.0f V  ", ESC.Bus_V);
 	lcd_putstring(1,0, buffer);
 
-	sprintf(buffer, "BAT VOLTAGE: %03lu V  ", BMU1.BATTERY_CURRENT);
+	sprintf(buffer, "BAT VOLTAGE: %03lu V  ", BMU.Battery_I);
 	lcd_putstring(2,0, buffer);
 
-	if((BMU1.BATTERY_VOLTAGE - ESC1.BUS_VOLTAGE) < 10)
+	if((BMU.Battery_V - ESC.Bus_V) < 10)
 	{
 		sprintf(buffer, "  **SAFE TO BOOT**  ");
 		lcd_putstring(3,0, buffer);
@@ -158,7 +159,9 @@ void displayHOME (void) // menus[2]
 		lcd_putstring(1,0, buffer);
 	}
 
-	if(CRUISE.ACTIVE)
+	// TODO: Unlikely to get throttle % from controller, can get absolute current.
+	// May be able to hard code current cap for controller and divide for %
+	if(STATS.CR_ACT)
 	{
 		if (CRUISE.CO >= 1000){sprintf(buffer, "CRUISE FW: %3d.%d%%   ", PWMA/10,PWMA%10);}
 		else{sprintf(buffer, "CRUISE RG: %3d.%d%%   ", PWMC/10,PWMC%10);}
@@ -187,27 +190,16 @@ void displayHOME (void) // menus[2]
 
 	// If no ERRORS then display MPPT Watts
 	// TODO: ??? check all errors?
-	if(ESC1.ERROR && ESC2.ERROR)
-	{
-		sprintf(buffer, "ESC1 & ESC2 FAULTS  ");
-		lcd_putstring(3,0, buffer);
-	}
 
-	else if(ESC1.ERROR)
+	if(ESC.ERROR)
 	{
 		sprintf(buffer, "ESC1 FAULT          ");
 		lcd_putstring(3,0, buffer);
 	}
 
-	else if(ESC2.ERROR)
-	{
-		sprintf(buffer, "ESC2 FAULT          ");
-		lcd_putstring(3,0, buffer);
-	}
-
 	else
 	{
-		sprintf(buffer, "ARRAY:    %3.1f W  ", MPPT2.WATTS+MPPT1.WATTS);
+		sprintf(buffer, "ARRAY:    %3.1f W  ", MPPT2.Watts+MPPT1.Watts);
 		lcd_putstring(3,0, buffer);
 	}
 }
@@ -278,15 +270,15 @@ void displayCRUISE (void) // menus[4]
 		_lcd_putTitle(buffer);
 		if (!REVERSE)
 		{
-			if (CRUISE.STATUS && CRUISE.ACTIVE)
+			if (STATS.CR_STS && STATS.CR_ACT)
 			{
 				sprintf(buffer, " STS:  ON  ACT:  ON ");
 				lcd_putstring(1,0, buffer);
 
-				sprintf(buffer, " SET: %3.0f  THR:%3d%% ", CRUISE.SP, PWMA/10);
+				sprintf(buffer, " SET: %3.0f  THR:%3d%% ", STATS.CRUISE_SPEED, PWMA/10);
 				lcd_putstring(2,0, buffer);
 
-				sprintf(buffer, " SPD: %3.0f  RGN:%3d%% ", ESC1.VELOCITY_KMHR, PWMC/10);
+				sprintf(buffer, " SPD: %3.0f  RGN:%3d%% ", ESC.Velocity_KMH, PWMC/10);
 				lcd_putstring(3,0, buffer);
 
 				// Button presses
@@ -294,28 +286,28 @@ void displayCRUISE (void) // menus[4]
 				if (SELECT)
 				{
 					// ACT: OFF
-					CRUISE.ACTIVE = 0;
+					STATS.CR_ACT = OFF;
 				}
 				else if (INCREMENT)
 				{
 					// SET + 1
-					CRUISE.SP += 1;
+					STATS.CRUISE_SPEED += 1;
 				}
 				else if (DECREMENT)
 				{
 					// SET - 1
-					CRUISE.SP -= 1;
+					STATS.CRUISE_SPEED -= 1;
 				}
 			}
-			else if (CRUISE.STATUS && !CRUISE.ACTIVE)
+			else if (STATS.CR_STS && !STATS.CR_ACT)
 			{
 				sprintf(buffer, " STS:  ON  ACT: OFF ");
 				lcd_putstring(1,0, buffer);
 
-				sprintf(buffer, " SET: %3.0f  THR:     ", CRUISE.SP);
+				sprintf(buffer, " SET: %3.0f  THR:     ", STATS.CRUISE_SPEED);
 				lcd_putstring(2,0, buffer);
 
-				sprintf(buffer, " SPD: %3.0f  RGN:     ", ESC1.VELOCITY_KMHR);
+				sprintf(buffer, " SPD: %3.0f  RGN:     ", ESC.Velocity_KMH);
 				lcd_putstring(3,0, buffer);
 
 				// Button presses
@@ -323,30 +315,30 @@ void displayCRUISE (void) // menus[4]
 				if (SELECT)
 				{
 					// STS: OFF
-					CRUISE.STATUS = 0;
-					CRUISE.SP = 0;
+					STATS.CR_STS = OFF;
+					STATS.CRUISE_SPEED = 0;
 					CRUISE.CO = 0;
 				}
 				else if (INCREMENT)
 				{
 					// check spd set
 					// ACT: ON
-					if (CRUISE.SP > 1)
+					if (STATS.CRUISE_SPEED > 1)
 					{
 						CRUISE.CO = PWMA + 1000;
-						CRUISE.ACTIVE = 1;
+						STATS.CR_ACT = ON;
 					}
 				}
 				else if (DECREMENT)
 				{
 					// SET: SPD
 					// ACT: ON
-					CRUISE.SP = ESC1.VELOCITY_KMHR;
+					STATS.CRUISE_SPEED = ESC.Velocity_KMH;
 					CRUISE.CO = PWMA + 1000;
-					CRUISE.ACTIVE = 1;
+					STATS.CR_ACT = ON;
 				}
 			}
-			else if (CRUISE.ACTIVE && !CRUISE.STATUS) // Should never trip, but just in case
+			else if (STATS.CR_ACT && !STATS.CR_STS) // Should never trip, but just in case
 			{
 				sprintf(buffer, " STS: OFF  ACT:  ON ");
 				lcd_putstring(1,0, buffer);
@@ -357,9 +349,9 @@ void displayCRUISE (void) // menus[4]
 				sprintf(buffer, "     RESETTING      ");
 				lcd_putstring(3,0, buffer);
 
-				CRUISE.ACTIVE = 0;
-				CRUISE.STATUS = 0;
-				CRUISE.SP = 0;
+				STATS.CR_ACT = OFF;
+				STATS.CR_STS = OFF;
+				STATS.CRUISE_SPEED = 0;
 			}
 			else
 			{
@@ -369,7 +361,7 @@ void displayCRUISE (void) // menus[4]
 				sprintf(buffer, " SET:      THR:     ");
 				lcd_putstring(2,0, buffer);
 
-				sprintf(buffer, " SPD: %3.0f  RGN:     ", ESC1.VELOCITY_KMHR);
+				sprintf(buffer, " SPD: %3.0f  RGN:     ", ESC.Velocity_KMH);
 				lcd_putstring(3,0, buffer);
 
 				// Button presses
@@ -377,8 +369,8 @@ void displayCRUISE (void) // menus[4]
 				if (SELECT)
 				{
 					// STS: ON
-					CRUISE.SP = 0;
-					CRUISE.STATUS = 1;
+					STATS.CRUISE_SPEED = 0;
+					STATS.CR_STS = ON;
 				}
 				else if (INCREMENT)
 				{
@@ -400,12 +392,13 @@ void displayCRUISE (void) // menus[4]
 
 			sprintf(buffer, "                    ");
 			lcd_putstring(3,0, buffer);
-			CRUISE.STATUS = 0;
-			CRUISE.ACTIVE = 0;
+			STATS.CR_STS = OFF;
+			STATS.CR_ACT = OFF;
 			CRUISE.CO = 0;
-			CRUISE.SP = 0;
+			STATS.CRUISE_SPEED = 0;
 		}
 	}
+	/*
 	else if (MENU.SUBMENU_POS == 1) // PID Menu
 	{
 		sprintf(buffer, "-CRU PI-");
@@ -416,7 +409,7 @@ void displayCRUISE (void) // menus[4]
 			{
 				default:
 					MENU.ITEM_SELECTOR = 0;
-					/* no break */
+					// no break
 				case 0:
 					sprintf(buffer, " Kc: %3.1f <<   RESET ", CRUISE.Kc);
 					lcd_putstring(1,0, buffer);
@@ -505,7 +498,7 @@ void displayCRUISE (void) // menus[4]
 					case 5: // reset & exit to cruise menu
 						MENU.SUBMENU_POS = 0;
 						MENU.ITEM_SELECTOR = 0;
-						/* no break */
+						// no break
 					case 3: // reset (read from eeprom)
 						CRUISE.Kc = convertToFloat(EERead(AddressCRU_Kc));
 						CRUISE.Ti = convertToFloat(EERead(AddressCRU_Ti));
@@ -589,6 +582,7 @@ void displayCRUISE (void) // menus[4]
 			}
 		}
 	}
+	*/
 	else if (MENU.SUBMENU_POS == 2)
 	{
 		sprintf(buffer, "-CRU TEST-");
@@ -602,7 +596,7 @@ void displayCRUISE (void) // menus[4]
 					MENU.ITEM_SELECTOR = 0;
 					/* no break */
 				case 0:
-					sprintf(buffer, "CO:%04.0f <<  SPD:%5.1f ", CRUISE.SP, ESC1.VELOCITY_KMHR);
+					sprintf(buffer, "CO:%04.0f <<  SPD:%5.1f ", CRUISE.SP, ESC.Velocity_KMH);
 					lcd_putstring(1,0, buffer);
 
 					sprintf(buffer, "SET                 ");
@@ -613,7 +607,7 @@ void displayCRUISE (void) // menus[4]
 					break;
 
 				case 1:
-					sprintf(buffer, "CO:%04.0f     SPD:%5.1f ", CRUISE.SP, ESC1.VELOCITY_KMHR);
+					sprintf(buffer, "CO:%04.0f     SPD:%5.1f ", CRUISE.SP, ESC.Velocity_KMH);
 					lcd_putstring(1,0, buffer);
 
 					sprintf(buffer, "SET     <<          ");
@@ -624,7 +618,7 @@ void displayCRUISE (void) // menus[4]
 					break;
 
 				case 2:
-					sprintf(buffer, "CO:%04.0f     SPD:%5.1f ", CRUISE.SP, ESC1.VELOCITY_KMHR);
+					sprintf(buffer, "CO:%04.0f     SPD:%5.1f ", CRUISE.SP, ESC.Velocity_KMH);
 					lcd_putstring(1,0, buffer);
 
 					sprintf(buffer, "SET                 ");
@@ -635,7 +629,7 @@ void displayCRUISE (void) // menus[4]
 					break;
 
 				case 3:
-					sprintf(buffer, "CO:%04.0f     SPD:%5.1f ", CRUISE.SP, ESC1.VELOCITY_KMHR);
+					sprintf(buffer, "CO:%04.0f     SPD:%5.1f ", CRUISE.SP, ESC.Velocity_KMH);
 					lcd_putstring(1,0, buffer);
 
 					sprintf(buffer, "SET                 ");
@@ -648,7 +642,7 @@ void displayCRUISE (void) // menus[4]
 		}
 		else
 		{
-			sprintf(buffer, "CO:%04.0f     SPD:%5.1f ", CRUISE.SP, ESC1.VELOCITY_KMHR);
+			sprintf(buffer, "CO:%04.0f     SPD:%5.1f ", CRUISE.SP, ESC.Velocity_KMH);
 			lcd_putstring(1,0, buffer);
 
 			sprintf(buffer, "SET                 ");
@@ -755,15 +749,15 @@ void displayMPPT1(void) // menus[5]
 	sprintf(buffer, "-MPPT 1-");
 	_lcd_putTitle(buffer);
 
-	if(MPPT1.CONNECTED)
+	if(MPPT1.Connected)
 	{
-		sprintf(buffer, "IN: %3lu.%luV @ %2lu.%02luA ", MPPT1.VOLTS_INPUT/10, MPPT1.VOLTS_INPUT%10, MPPT1.CURRENT_IN/100, MPPT1.CURRENT_IN%100);
+		sprintf(buffer, "IN: %3lu.%luV @ %2lu.%02luA ", MPPT1.VIn/10, MPPT1.VIn%10, MPPT1.IIn/100, MPPT1.IIn%100);
 		lcd_putstring(1,0, buffer);
 
-		sprintf(buffer, "OUT:%3lu.%luV @ %3.1fW ", MPPT1.VOLTS_OUTPUT/10, MPPT1.VOLTS_OUTPUT%10, MPPT1.WATTS);
+		sprintf(buffer, "OUT:%3lu.%luV @ %3.1fW ", MPPT1.VOut/10, MPPT1.VOut%10, MPPT1.Watts);
 		lcd_putstring(2,0, buffer);
 
-		sprintf(buffer, "%2lu%cC", MPPT1.TEMP_DEGREES, 0xDF);
+		sprintf(buffer, "%2lu%cC", MPPT1.Tmp, 0xDF);
 		lcd_putstring(3,16, buffer);
 
 		if(CLOCK.T_mS > 0 && CLOCK.T_mS < 25)
@@ -865,15 +859,15 @@ void displayMPPT2(void) // menus[6]
 	sprintf(buffer, "-MPPT 2-");
 	_lcd_putTitle(buffer);
 
-	if(MPPT2.CONNECTED)
+	if(MPPT2.Connected)
 	{
-		sprintf(buffer, "IN: %3lu.%luV @ %2lu.%02luA ", MPPT2.VOLTS_INPUT/10, MPPT2.VOLTS_INPUT%10, MPPT2.CURRENT_IN/100, MPPT2.CURRENT_IN%100);
+		sprintf(buffer, "IN: %3lu.%luV @ %2lu.%02luA ", MPPT2.VIn/10, MPPT2.VIn%10, MPPT2.IIn/100, MPPT2.IIn%100);
 		lcd_putstring(1,0, buffer);
 
-		sprintf(buffer, "OUT:%3lu.%luV @ %3.1fW ", MPPT2.VOLTS_OUTPUT/10, MPPT2.VOLTS_OUTPUT%10, MPPT2.WATTS);
+		sprintf(buffer, "OUT:%3lu.%luV @ %3.1fW ", MPPT2.VOut/10, MPPT2.VOut%10, MPPT2.Watts);
 		lcd_putstring(2,0, buffer);
 
-		sprintf(buffer, "%2lu%cC", MPPT2.TEMP_DEGREES, 0xDF);
+		sprintf(buffer, "%2lu%cC", MPPT2.Tmp, 0xDF);
 		lcd_putstring(3,16, buffer);
 
 		if(CLOCK.T_mS > 0 && CLOCK.T_mS < 25)
@@ -976,19 +970,19 @@ void displayMPPT_MAH (void) // menus[7]
 	sprintf(buffer, "-POWER IN-");
 	_lcd_putTitle(buffer);
 
-	sprintf(buffer, "MPPT1: %.2f Whrs  ", MPPT1.WATTHRS);
+	sprintf(buffer, "MPPT1: %.2f Whrs  ", MPPT1.WattHrs);
 	lcd_putstring(1,0, buffer);
 
-	sprintf(buffer, "MPPT2: %.2f Whrs  ", MPPT2.WATTHRS);
+	sprintf(buffer, "MPPT2: %.2f Whrs  ", MPPT2.WattHrs);
 	lcd_putstring(2,0, buffer);
 
-	sprintf(buffer, "TOTAL: %.2f Whrs  ", STATS.MPPT_WHR_TOTAL);
+	sprintf(buffer, "TOTAL: %.2f Whrs  ", MPPT1.WattHrs + MPPT2.WattHrs);
 	lcd_putstring(3,0, buffer);
 
 	if(SELECT && INCREMENT)
 	{
-		MPPT1.WATTHRS = 0;
-		MPPT2.WATTHRS = 0;
+		MPPT1.WattHrs = 0;
+		MPPT2.WattHrs = 0;
 		buzzer(300);
 	}
 }
@@ -1014,44 +1008,34 @@ void displayMOTOR (void) // menus[8]
 		sprintf(buffer, "-MTR PWR-");
 		_lcd_putTitle(buffer);
 
-		sprintf(buffer, "ESC1: %.1fV @ %.1fA ", ESC1.BUS_VOLTAGE, ESC1.BUS_CURRENT);
+		sprintf(buffer, "ESC: %.1fV @ %.1fA ", ESC.Bus_V, ESC.Bus_I);
 		lcd_putstring(1,0, buffer);
 
-		sprintf(buffer, "ESC2: %.1fV @ %.1fA ", ESC2.BUS_VOLTAGE, ESC2.BUS_CURRENT);
-		lcd_putstring(2,0, buffer);
-
-		sprintf(buffer, "Total Power: %.1f ",  ESC1.WATTS + ESC2.WATTS);
+		sprintf(buffer, "Total Power: %.1f ",  ESC.Watts);
 		lcd_putstring(3,0, buffer);
 		break;
 	case 1:
 		sprintf(buffer, "-PWR USED-");
 		_lcd_putTitle(buffer);
 
-		sprintf(buffer, "ESC1: %.2f W/hrs", ESC1.WATT_HOUR_USED);
+		sprintf(buffer, "ESC: %.2f W/hrs", ESC.WattHrs);
 		lcd_putstring(1,0, buffer);
 
-		sprintf(buffer, "ESC2: %.2f W/hrs", ESC2.WATT_HOUR_USED);
-		lcd_putstring(2,0, buffer);
-
-		sprintf(buffer, "TOTAL: %.2f W/hrs", STATS.ESC_WHR_TOTAL);
-		lcd_putstring(3,0, buffer);
 		break;
-	case 2:
+	case 2: // TODO: Display peak V?
 		sprintf(buffer, "-MTR PKS-");
 		_lcd_putTitle(buffer);
 
-		sprintf(buffer, "%.1fAp @ %.1fWp ", ESC1.PEAK_CURR, ESC1.PEAKWATTS);
+		sprintf(buffer, "%.1fAp @ %.1fWp ", ESC.MAX_Bus_I, ESC.MAX_Watts);
 		lcd_putstring(1,0, buffer);
 
-		sprintf(buffer, "%.1fAp @ %.1fWp ", ESC2.PEAK_CURR, ESC2.PEAKWATTS);
-		lcd_putstring(2,0, buffer);
 
 		sprintf(buffer, "                    ");
 		lcd_putstring(3,0, buffer);
 		if (SELECT)
 		{
-			ESC1.PEAK_CURR = ESC1.PEAKWATTS = 0;
-			ESC2.PEAK_CURR = ESC2.PEAKWATTS = 0;
+			ESC.MAX_Bus_I = ESC.MAX_Watts = 0;
+			ESC.MAX_Bus_V = 0;
 
 			buzzer(600);
 		}
@@ -1072,24 +1056,24 @@ void displayMOTOR (void) // menus[8]
 **
 ******************************************************************************/
 void displayDEBUG (void) // menus[9]
-{
+{// TODO: Update field names
 	char buffer[20];
 
 	sprintf(buffer, "-DEBUG-");
 	_lcd_putTitle(buffer);
 
-	sprintf(buffer, "BUS E: %.1f Whrs ", BMU1.WHR_TOTAL);
+	sprintf(buffer, "BUS E: %.1f Whrs ", BMU.WattHrs);
 	lcd_putstring(1,0, buffer);
 
-	sprintf(buffer, "BUS I: %.1f Amps ", BMU1.BUS_CURRENT);
+	sprintf(buffer, "BUS I: %.1f Amps ", BMU.Battery_I);
 	lcd_putstring(2,0, buffer);
 
-	sprintf(buffer, "BUS P: %.1f Watts", BMU1.WATTS);
+	sprintf(buffer, "BUS P: %.1f Watts", BMU.Watts);
 	lcd_putstring(3,0, buffer);
 
 	if(SELECT && INCREMENT)
 	{
-		BMU1.WHR_TOTAL = 0;
+		BMU.WattHrs = 0;
 		buzzer(300);
 	}
 }
@@ -1104,7 +1088,7 @@ void displayDEBUG (void) // menus[9]
 **
 ******************************************************************************/
 void displayERRORS (void) // menus[10]
-{
+{ // TODO: Show all errors?
 	char buffer[20];
 
 	sprintf(buffer, "-ESC FALT-");
@@ -1116,25 +1100,16 @@ void displayERRORS (void) // menus[10]
 		sprintf(buffer, "ESC1 & ESC2 FAULTS  ");
 		lcd_putstring(2,0, buffer);
 
-		sprintf(buffer, "CODE: %d - %d", ESC1.ERROR, ESC2.ERROR);
+		sprintf(buffer, "CODE: %d ", ESC.ERROR);
 		lcd_putstring(3,0, buffer);
 	}
 
-	else if(ESC1.ERROR)
+	else if(ESC.ERROR)
 	{
-		sprintf(buffer, "ESC1 FAULT          ");
+		sprintf(buffer, "ESC FAULT          ");
 		lcd_putstring(2,0, buffer);
 
 		sprintf(buffer, "CODE: %d", ESC1.ERROR);
-		lcd_putstring(3,0, buffer);
-	}
-
-	else if(ESC2.ERROR)
-	{
-		sprintf(buffer, "ESC2 FAULT          ");
-		lcd_putstring(2,0, buffer);
-
-		sprintf(buffer, "CODE: %d", ESC2.ERROR);
 		lcd_putstring(3,0, buffer);
 	}
 
@@ -1316,17 +1291,17 @@ void displayPEAKS (void) // menus[12]
 	sprintf(buffer, "-DATA PKS-");
 	_lcd_putTitle(buffer);
 
-	sprintf(buffer, "ARRAY: %.1f Watts  ", MPPT1.WATTSPEAK + MPPT2.WATTSPEAK);
+	sprintf(buffer, "ARRAY: %.1f Watts  ", MPPT1.MAX_Watts + MPPT2.MAX_Watts);
 	lcd_putstring(2,0, buffer);
 
-	sprintf(buffer, "TOP SPD: %3.1f kmh  ", STATS.maxSPEED);
+	sprintf(buffer, "TOP SPD: %3.1f kmh  ", STATS.MAX_SPEED);
 	lcd_putstring(3,0, buffer);
 
 	if(SELECT)
 	{
-		MPPT1.WATTSPEAK = 0;
-		MPPT2.WATTSPEAK = 0;
-		STATS.maxSPEED = 0;
+		MPPT1.MAX_Watts = 0;
+		MPPT2.MAX_Watts = 0;
+		STATS.MAX_SPEED = 0;
 		buzzer(300);
 	}
 }
@@ -1499,7 +1474,7 @@ void _lcd_putTitle (char *_title)
 	for (;bufadd != buffer + 10; bufadd++)
 	{*bufadd = ' ';}
 
-	sprintf(spd, " %05.1fkmh ", ESC1.VELOCITY_KMHR);
+	sprintf(spd, " %05.1fkmh ", ESC.Velocity_KMH);
 
 	for (;bufadd != buffer + 20; bufadd++)
 	{
@@ -1521,8 +1496,8 @@ void _lcd_putTitle (char *_title)
 ******************************************************************************/
 void menuInit (void)
 {
-	MENU.errors[0] = SWOC;
-	MENU.errors[1] = HWOC;
+	MENU.errors[0] = displaySWOC;
+	MENU.errors[1] = displayHWOC;
 
 	MENU.menus[0] = displayINFO;
 	MENU.menus[1] = displayBUSDATA;
@@ -1530,7 +1505,7 @@ void menuInit (void)
 	MENU.menus[3] = displayDRIVE;
 	MENU.menus[4] = displayCRUISE;
 	MENU.menus[5] = displayMPPT1;
-	MENU.menus[6] = displatMPPT2;
+	MENU.menus[6] = displayMPPT2;
 	MENU.menus[7] = displayMPPT_MAH;
 	MENU.menus[8] = displayMOTOR;
 	MENU.menus[9] = displayDEBUG;
