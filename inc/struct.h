@@ -67,7 +67,7 @@ typedef struct // MPPT
 	unsigned int Connected :2;	// 2 bit field for 0-2 count range
 #if _MPPT_POWER
 	uint32_t Watts;				// Watts into MPPT
-	float WattHrs;				// Amps Hours
+	float WattHrs;				// Watt Hours
 #if _MPPT_PEAKS
 	uint32_t MAX_Watts;			// Peak Watts into MPPT
 #endif // _MPPT_PEAKS
@@ -194,9 +194,9 @@ struct // BMU
 	float BAL_SOC_PER;
 #endif // _BMU_BAL_SOC
 #if _BMU_THRES
-	uint16_t Charge_Cell_V_Err;		//
-	uint16_t Cell_Tmp_Margin;		//
-	uint16_t Discharge_Cell_V_Err;	//
+	int16_t Charge_Cell_V_Err;		//
+	int16_t Cell_Tmp_Margin;		//
+	int16_t Discharge_Cell_V_Err;	//
 #endif // _BMU_THRES
 #if _BMU_CAP
 	uint16_t Pack_Capacity;
@@ -255,7 +255,8 @@ struct // BMU
 #endif // _BMU_PEAKS
 #endif // _BMU_POWER
 #if _BMU_PEAKS
-	uint32_t MAX_Battery_I;
+	uint32_t MAX_Battery_V;
+	int32_t MAX_Battery_I;
 #endif // _BMU_PEKAS
 }BMU;
 
@@ -263,7 +264,7 @@ struct // STATS
 {
 	int RAMP_SPEED;
 	float ODOMETER;
-	float ODOMETER_REV;
+	//float ODOMETER_REV;
 	float MAX_SPEED;
 	float CRUISE_SPEED;
 	FLAG(DRIVE_MODE)

@@ -137,15 +137,14 @@ explicit EXT IDs, and group EXT IDs. */
 #define DASH_RPLY				0x510		// Messages from dash
 #define DASH_RQST				0x520		// Messages to dash
 
-#define GRP_STD_ID				0x200
-#define EXP_EXT_ID				0x100000
-#define GRP_EXT_ID				0x200000
-
-
 #define ESC_BASE	0x400	// Base address of motor controller
 
 #define BMU_BASE 0x600
 #define BMU_INFO 0xF4		// Add to base to skip CMU packets
+
+#define GRP_STD_ID				0x200
+#define EXP_EXT_ID				0x100000
+#define GRP_EXT_ID				0x200000
 
 
 // Type definition to hold a CAN message

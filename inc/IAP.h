@@ -23,7 +23,7 @@
  *****************************************************************************/
 #ifndef __IAP_H
 #define	__IAP_H
-
+// TODO: Check if required
 #include <stdint.h>
 
 /*

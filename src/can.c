@@ -64,52 +64,52 @@ void CAN_ISR_Rx1( void )
 #endif
 	break;
 	case ESC_BASE + 2:
-	ESC.Bus_V = convertToFloat(MsgBuf_RX1.DataA);
-	ESC.Bus_I = convertToFloat(MsgBuf_RX1.DataB);
+	ESC.Bus_V = conv_uint_float(MsgBuf_RX1.DataA);
+	ESC.Bus_I = conv_uint_float(MsgBuf_RX1.DataB);
 	break;
 	case ESC_BASE + 3:
 #if _MC_VELOCITY == 1
-	ESC.Velocity_KMH = convertToFloat(MsgBuf_RX1.DataB)*3.6;
+	ESC.Velocity_KMH = conv_uint_float(MsgBuf_RX1.DataB)*3.6;
 #elif _MC_VELOCITY == 2
-	ESC.Velocity_RPM = convertToFloat(MsgBuf_RX1.DataA);
+	ESC.Velocity_RPM = conv_uint_float(MsgBuf_RX1.DataA);
 #elif _MC_VELOCITY == 3
-	ESC.Velocity_KMH = convertToFloat(MsgBuf_RX1.DataB)*3.6;
-	ESC.Velocity_RPM = convertToFloat(MsgBuf_RX1.DataA);
+	ESC.Velocity_KMH = conv_uint_float(MsgBuf_RX1.DataB)*3.6;
+	ESC.Velocity_RPM = conv_uint_float(MsgBuf_RX1.DataA);
 #endif
 	break;
 	case ESC_BASE + 4:
 #if _MC_PHASE
-	ESC.PhaseC_I = convertToFloat(MsgBuf_RX1.DataB);
-	ESC.PhaseB_I = convertToFloat(MsgBuf_RX1.DataA);
+	ESC.PhaseC_I = conv_uint_float(MsgBuf_RX1.DataB);
+	ESC.PhaseB_I = conv_uint_float(MsgBuf_RX1.DataA);
 #endif
 	break;
 	case ESC_BASE + 5:
 #if _MC_VECTORS
-	ESC.VECTORS->V_Real = convertToFloat(MsgBuf_RX1.DataB);
-	ESC.VECTORS->V_Imag = convertToFloat(MsgBuf_RX1.DataA);
+	ESC.VECTORS->V_Real = conv_uint_float(MsgBuf_RX1.DataB);
+	ESC.VECTORS->V_Imag = conv_uint_float(MsgBuf_RX1.DataA);
 #endif
 	break;
 	case ESC_BASE + 6:
 #if _MC_VECTORS
-	ESC.VECTORS->I_Real = convertToFloat(MsgBuf_RX1.DataB);
-	ESC.VECTORS->I_Imag = convertToFloat(MsgBuf_RX1.DataA);
+	ESC.VECTORS->I_Real = conv_uint_float(MsgBuf_RX1.DataB);
+	ESC.VECTORS->I_Imag = conv_uint_float(MsgBuf_RX1.DataA);
 #endif
 	break;
 	case ESC_BASE + 7:
 #if _MC_VECTORS
-	ESC.VECTORS->BEMF_Real = convertToFloat(MsgBuf_RX1.DataB);
-	ESC.VECTORS->BEMF_Imag = convertToFloat(MsgBuf_RX1.DataA);
+	ESC.VECTORS->BEMF_Real = conv_uint_float(MsgBuf_RX1.DataB);
+	ESC.VECTORS->BEMF_Imag = conv_uint_float(MsgBuf_RX1.DataA);
 #endif
 	break;
 	case ESC_BASE + 8:
 #if _MC_RAILS
-	ESC.Rail_15V = convertToFloat(MsgBuf_RX1.DataB);
+	ESC.Rail_15V = conv_uint_float(MsgBuf_RX1.DataB);
 #endif
 	break;
 	case ESC_BASE + 9:
 #if _MC_RAILS
-	ESC.Rail_3300mV = convertToFloat(MsgBuf_RX1.DataB);
-	ESC.Rail_1900mV = convertToFloat(MsgBuf_RX1.DataA);
+	ESC.Rail_3300mV = conv_uint_float(MsgBuf_RX1.DataB);
+	ESC.Rail_1900mV = conv_uint_float(MsgBuf_RX1.DataA);
 #endif
 	break;
 	case ESC_BASE + 10:
@@ -117,13 +117,13 @@ void CAN_ISR_Rx1( void )
 	break;
 	case ESC_BASE + 11:
 #if _MC_TMP
-	ESC.Heatsink_Tmp = convertToFloat(MsgBuf_RX1.DataB);
-	ESC.Motor_Tmp = convertToFloat(MsgBuf_RX1.DataA);
+	ESC.Heatsink_Tmp = conv_uint_float(MsgBuf_RX1.DataB);
+	ESC.Motor_Tmp = conv_uint_float(MsgBuf_RX1.DataA);
 #endif
 	break;
 	case ESC_BASE + 12:
 #if _MC_TMP
-	ESC.Board_Tmp = convertToFloat(MsgBuf_RX1.DataA);
+	ESC.Board_Tmp = conv_uint_float(MsgBuf_RX1.DataA);
 #endif
 	break;
 	case ESC_BASE + 13:
@@ -131,15 +131,15 @@ void CAN_ISR_Rx1( void )
 	break;
 	case ESC_BASE + 14:
 #if _MC_AMPHRS
-	ESC.DC_AmpHrs = convertToFloat(MsgBuf_RX1.DataB);
+	ESC.DC_AmpHrs = conv_uint_float(MsgBuf_RX1.DataB);
 #endif
 #if _MC_ODO
-	ESC.Odometer = convertToFloat(MsgBuf_RX1.DataA);
+	ESC.Odometer = conv_uint_float(MsgBuf_RX1.DataA);
 #endif
 	break;
 	case ESC_BASE + 23:
 #if _MC_SLIP
-	ESC.Slip_Speed = convertToFloat(MsgBuf_RX1.DataB);
+	ESC.Slip_Speed = conv_uint_float(MsgBuf_RX1.DataB);
 #endif
 	break;
 
@@ -170,22 +170,22 @@ void CAN_ISR_Rx1( void )
 
 	case BMU_BASE + BMU_INFO:
 #if _BMU_SOC == 1
-	BMU.SOC = convertToFloat(MsgBuf_RX1.DataB);
+	BMU.SOC = conv_uint_float(MsgBuf_RX1.DataB);
 #elif _BMU_SOC == 2
-	BMU.SOC_PER = convertToFloat(MsgBuf_RX1.DataA);
+	BMU.SOC_PER = conv_uint_float(MsgBuf_RX1.DataA);
 #elif _BMU_SOC == 3
-	BMU.SOC = convertToFloat(MsgBuf_RX1.DataB);
-	BMU.SOC_PER = convertToFloat(MsgBuf_RX1.DataA);
+	BMU.SOC = conv_uint_float(MsgBuf_RX1.DataB);
+	BMU.SOC_PER = conv_uint_float(MsgBuf_RX1.DataA);
 #endif
 	break;
 	case BMU_BASE + BMU_INFO + 1:
 #if _BMU_BAL_SOC == 1
-	BMU.BAL_SOC = convertToFloat(MsgBuf_RX1.DataB);
+	BMU.BAL_SOC = conv_uint_float(MsgBuf_RX1.DataB);
 #elif _BMU_BAL_SOC == 2
-	BMU.BAL_SOC_PER = convertToFloat(MsgBuf_RX1.DataA);
+	BMU.BAL_SOC_PER = conv_uint_float(MsgBuf_RX1.DataA);
 #elif _BMU_BAL_SOC == 3
-	BMU.BAL_SOC = convertToFloat(MsgBuf_RX1.DataB);
-	BMU.BAL_SOC_PER = convertToFloat(MsgBuf_RX1.DataA);
+	BMU.BAL_SOC = conv_uint_float(MsgBuf_RX1.DataB);
+	BMU.BAL_SOC_PER = conv_uint_float(MsgBuf_RX1.DataA);
 #endif
 	break;
 	case BMU_BASE + BMU_INFO + 2:
@@ -375,7 +375,7 @@ uint32_t CAN1_Init( uint32_t can_btr )
 {
   CAN1RxDone = FALSE;
 
-  LPC_SC->PCONP |= (1<<13);  /* Enable CAN1 and CAN2 clock */
+  LPC_SC->PCONP |= (1<<13);  /* Enable CAN1 clock */
 
   LPC_PINCON->PINSEL1 |= (1<<13)|(1<<12)|(1<<11)|(1<<10);
 
@@ -405,7 +405,7 @@ uint32_t CAN2_Init( uint32_t can_btr )
 {
   CAN2RxDone = FALSE;
 
-  LPC_SC->PCONP |= (1<<14);  /* Enable CAN1 and CAN2 clock */
+  LPC_SC->PCONP |= (1<<14);  /* Enable CAN2 clock */
 
   LPC_PINCON->PINSEL0 |= (1<<9)|(1<<11);
 
@@ -620,9 +620,9 @@ void setCANBUS1(void)
 	/* Even though the filter RAM is set for all type of identifiers,
 	the test module tests explicit standard identifier only */
 	MsgBuf_TX1.Frame = 0x00080000; /* 11-bit, no RTR, DLC is 8 bytes */
-	MsgBuf_TX1.MsgID = MPPT1_BASE_ID; /* Explicit Standard ID */
-	MsgBuf_TX1.DataA = 0x00000000;
-	MsgBuf_TX1.DataB = 0x00000000;
+	MsgBuf_TX1.MsgID = 0x0; /* Explicit Standard ID */
+	MsgBuf_TX1.DataA = 0x0;
+	MsgBuf_TX1.DataB = 0x0;
 
 	MsgBuf_RX1.Frame = 0x0;
 	MsgBuf_RX1.MsgID = 0x0;

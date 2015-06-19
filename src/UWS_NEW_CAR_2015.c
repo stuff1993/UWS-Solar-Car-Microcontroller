@@ -16,13 +16,16 @@
 #include <stdint.h>
 #include <stdio.h>
 
+// TODO: Check BMU ignition switch (CAN address 0x505)
+// TRI67.010v2_BMS_BMU_Communications_Protocol.pdf
+
 #include "inttofloat.h"
 #include "timer.h"
 #include "lcd.h"
 #include "pwm.h"
 #include "adc.h"
 #include "can.h"
-#include "IAP.h"
+//#include "IAP.h"
 #include "i2c.h"
 #include "menu.h"
 #include "dash.h"
@@ -93,20 +96,24 @@ void SysTick_Handler (void)
 	if (CLOCK.T_mS % 10 == 0) // Every 100 mS
 	{
 		// TODO: Transmit drive CAN packet
+		MsgBuf_TX1.Frame = 0x00080000;
+		MsgBuf_TX1.MsgID = ESC_BASE + 1;
+		MsgBuf_TX1.DataA = conv_float_uint(DRIVE.Speed_RPM);
+		MsgBuf_TX1.DataB = conv_float_uint(DRIVE.Current);
+		CAN1_SendMessage( &MsgBuf_TX1 );
 	}
 
 	////////////////////////  AMP/hr and WATT/hr Calculations  ///////////////////////
-	ESC.WattHrs = ESC.WattHrs + (ESC.Watts/360000);
+	ESC.WattHrs += (ESC.Watts/360000);
 
-	MPPT1.WattHrs = MPPT1.WattHrs + (MPPT1.Watts/360000);
-	MPPT2.WattHrs = MPPT2.WattHrs + (MPPT2.Watts/360000);
+	MPPT1.WattHrs += (MPPT1.Watts/360000);
+	MPPT2.WattHrs += (MPPT2.Watts/360000);
 
-	BMU.WattHrs = BMU.WattHrs + BMU.Watts/360000;
+	BMU.WattHrs += (BMU.Watts/360000);
 
 	////////////////////////  Odometer Calculations  ///////////////////////
-	if(ESC.Velocity_KMH>0){STATS.ODOMETER 	  = STATS.ODOMETER	   + ESC.Velocity_KMH/360000;}
-
-	if(ESC.Velocity_KMH<0){STATS.ODOMETER_REV = STATS.ODOMETER_REV + ESC.Velocity_KMH/360000;}
+	STATS.ODOMETER += ESC.Velocity_KMH/360000;
+	//if(ESC.Velocity_KMH<0){STATS.ODOMETER_REV = STATS.ODOMETER_REV + ESC.Velocity_KMH/360000;}
 	//////////////////////////////////////////////////////////////////////////////////
 
 	if(CLOCK.T_mS >= 100) // Calculate time
@@ -246,11 +253,9 @@ void extractMPPTDATA (MPPT *_MPPT, fakeMPPTFRAME *_fkMPPT)
 	_VOut = _VOut + ((_Data_B & 0xFF00) >> 8); 	// Masking and shifting the lower 8 LSB
 	_VOut = _VOut * 2.10;						// Scaling
 
-	// TODO: May run iir filter
-	_MPPT->Tmp = (((_Data_B & 0xFF0000) >> 16) + 7 * _MPPT->Tmp)/8;
-
 	// Update the global variables after IIR filtering
-	_MPPT->VIn = iirFILTER(_VIn, _MPPT->VIn);	//infinite impulse response filtering
+	_MPPT->Tmp = iirFilter(((_Data_B & 0xFF0000) >> 16), _MPPT->Tmp, 8); //infinite impulse response filtering
+	_MPPT->VIn = iirFILTER(_VIn, _MPPT->VIn);
 	_MPPT->IIn = iirFILTER(_IIn, _MPPT->IIn);
 	_MPPT->VOut = iirFILTER(_VOut, _MPPT->VOut);
 	if(_MPPT->Connected<2){_MPPT->Connected = 2;}
@@ -284,7 +289,7 @@ void checkBUTTONS (void)
 		if((ESC.ERROR & 0x2) && !STATS.SWOC_ACK){STATS.SWOC_ACK = TRUE;}
 		if((ESC.ERROR & 0x1) && !STATS.HWOC_ACK){STATS.HWOC_ACK = TRUE;BUZZER_OFF}
 
-		lcdCLEAR();
+		lcd_clear();
 		MENU.SELECTED = 0;
 		MENU.ITEM_SELECTOR = 0;
 		MENU.SUBMENU_POS = 0;
@@ -298,7 +303,7 @@ void checkBUTTONS (void)
 		if((ESC.ERROR & 0x2) && !STATS.SWOC_ACK){STATS.SWOC_ACK = TRUE;}
 		if((ESC.ERROR & 0x1) && !STATS.HWOC_ACK){STATS.HWOC_ACK = TRUE;BUZZER_OFF}
 
-		lcdCLEAR();
+		lcd_clear();
 		MENU.SELECTED = 0;
 		MENU.ITEM_SELECTOR = 0;
 		MENU.SUBMENU_POS = 0;
@@ -474,13 +479,8 @@ void tx500CAN (void) // TODO: Rewrite
 		if((MsgBuf_RX1.MsgID == DASH_RQST) && (MsgBuf_RX1.DataA == 0x4C4C494B) && (MsgBuf_RX1.DataB == 0x45565244)) // Data = KILLDRVE
 		{
 
-			lcdCLEAR();
+			lcd_clear();
 			char buffer[20];
-			/*
-			DUTYA = 0;
-			DUTYB = 0;
-			DUTYC = 0;
-			*/
 
 			sprintf(buffer, "--   KILL DRIVE   --");
 			lcd_putstring(0,0, buffer);
@@ -494,17 +494,21 @@ void tx500CAN (void) // TODO: Rewrite
 				delayMs(1,500);
 			}
 
-			lcdCLEAR();
+			lcd_clear();
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////
-
+		// TODO: Remove + talk to matt about custom packet comms
+		// RPLY1 - ACK DRIVE KILL
+		// RPLY2 - COMMS CHECK RESULT
+		// RPLY3 - ACK PULL OVER REQ
+		// RPLY4 - component tmps?
 		if((LPC_CAN1->GSR & (1 << 3))  && !STATS.MPPT_POLL_COUNT)		// If previous transmission is complete, send message;
 		{
 			MsgBuf_TX1.Frame = 0x00080000; 							/* 11-bit, no RTR, DLC is 8 bytes */
 			MsgBuf_TX1.MsgID = DASH_RPLY_3; 						/* Explicit Standard ID */
-			MsgBuf_TX1.DataA = convertToUint(MPPT1.WattHrs + MPPT2.WattHrs);		// MPPT WHR TOTAL
-			MsgBuf_TX1.DataB = convertToUint(BMU.WattHrs);		// BMU WHR TOTAL
+			MsgBuf_TX1.DataA = conv_float_uint(MPPT1.WattHrs + MPPT2.WattHrs);		// MPPT WHR TOTAL
+			MsgBuf_TX1.DataB = conv_float_uint(BMU.WattHrs);		// BMU WHR TOTAL
 			CAN1_SendMessage( &MsgBuf_TX1 );
 		}
 
@@ -512,8 +516,8 @@ void tx500CAN (void) // TODO: Rewrite
 		{
 			MsgBuf_TX1.Frame = 0x00080000; 							/* 11-bit, no RTR, DLC is 8 bytes */
 			MsgBuf_TX1.MsgID = DASH_RPLY_4; 						/* Explicit Standard ID */
-			MsgBuf_TX1.DataA = convertToUint(MPPT1.Watts + MPPT2.Watts);	// MPPT CURRENT WATTS
-			MsgBuf_TX1.DataB = convertToUint(BMU.Watts);					// BMU CURRENT WATTS
+			MsgBuf_TX1.DataA = conv_float_uint(MPPT1.Watts + MPPT2.Watts);	// MPPT CURRENT WATTS
+			MsgBuf_TX1.DataB = conv_float_uint(BMU.Watts);					// BMU CURRENT WATTS
 			CAN1_SendMessage( &MsgBuf_TX1 );
 		}
 
@@ -547,14 +551,22 @@ void doCALCULATIONS (void)
 
 	// Check peaks
 	if(ESC.Watts > ESC.MAX_Watts){ESC.MAX_Watts = ESC.Watts;}
-
 	if(ESC.Bus_I > ESC.MAX_Bus_I){ESC.MAX_Bus_I = ESC.Bus_I;}
 	if(ESC.Bus_V > ESC.MAX_Bus_V){ESC.MAX_Bus_V = ESC.Bus_V;}
 
+	if(MPPT1.Tmp > MPPT1.MAX_Tmp){MPPT1.MAX_Tmp = MPPT1.Tmp;}
+	if(MPPT1.VIn > MPPT1.MAX_VIn){MPPT1.MAX_VIn = MPPT1.VIn;}
+	if(MPPT1.IIn > MPPT1.MAX_IIn){MPPT1.MAX_IIn = MPPT1.IIn;}
 	if(MPPT1.Watts > MPPT1.MAX_Watts){MPPT1.MAX_Watts = MPPT1.Watts;}
+
+	if(MPPT2.Tmp > MPPT2.MAX_Tmp){MPPT2.MAX_Tmp = MPPT2.Tmp;}
+	if(MPPT2.VIn > MPPT2.MAX_VIn){MPPT2.MAX_VIn = MPPT2.VIn;}
+	if(MPPT2.IIn > MPPT2.MAX_IIn){MPPT2.MAX_IIn = MPPT2.IIn;}
 	if(MPPT2.Watts > MPPT2.MAX_Watts){MPPT2.MAX_Watts = MPPT2.Watts;}
 
 	if(BMU.Watts > BMU.MAX_Watts){BMU.MAX_Watts = BMU.Watts;}
+	if(BMU.Battery_I > BMU.MAX_Battery_I){BMU.MAX_Battery_I = BMU.Battery_I;}
+	if(BMU.Battery_V > BMU.MAX_Battery_V){BMU.MAX_Battery_V = BMU.Battery_V;}
 }
 
 /******************************************************************************
@@ -574,17 +586,17 @@ void recallVariables (void)
 	if(EERead(AddressBL) < 2000){PWMBL = EERead(AddressBL);}
 	else{PWMBL = 500;EEWrite(AddressBL, PWMBL);}
 
-	STATS.ODOMETER = convertToFloat(EERead(AddressODOF));
-	STATS.ODOMETER_REV = convertToFloat(EERead(AddressODOR));
+	STATS.ODOMETER = conv_uint_float(EERead(AddressODOF));
+	//STATS.ODOMETER_REV = convertToFloat(EERead(AddressODOR));
 	STATS.MAX_SPEED = 0;
 	STATS.RAMP_SPEED = 5;
 	STATS.CRUISE_SPEED = 0;
 	STATS.CR_ACT = 0;
 	STATS.CR_STS = 0;
 
-	BMU.WattHrs = convertToFloat(EERead(AddressBMUWHR));
-	MPPT1.WattHrs = convertToFloat(EERead(AddressMPPT1WHR));
-	MPPT2.WattHrs = convertToFloat(EERead(AddressMPPT2WHR));
+	BMU.WattHrs = conv_uint_float(EERead(AddressBMUWHR));
+	MPPT1.WattHrs = conv_uint_float(EERead(AddressMPPT1WHR));
+	MPPT2.WattHrs = conv_uint_float(EERead(AddressMPPT2WHR));
 }
 
 /******************************************************************************
@@ -600,19 +612,19 @@ void storeVariables (void)
 {
 	if(CLOCK.T_S % 2)
 	{
-		EEWrite(AddressODOF, convertToUint(STATS.ODOMETER));
+		EEWrite(AddressODOF, conv_float_uint(STATS.ODOMETER));
 		delayMs(1,3);
-		EEWrite(AddressODOR, convertToUint(STATS.ODOMETER_REV));
-		delayMs(1,3);
+		//EEWrite(AddressODOR, conv_float_uint(STATS.ODOMETER_REV));
+		//delayMs(1,3);
 	}
 
 	else
 	{
-		EEWrite(AddressBMUWHR, convertToUint(BMU.WattHrs));
+		EEWrite(AddressBMUWHR, conv_float_uint(BMU.WattHrs));
 		delayMs(1,3);
-		EEWrite(AddressMPPT1WHR, convertToUint(MPPT1.WattHrs));
+		EEWrite(AddressMPPT1WHR, conv_float_uint(MPPT1.WattHrs));
 		delayMs(1,3);
-		EEWrite(AddressMPPT2WHR, convertToUint(MPPT2.WattHrs));
+		EEWrite(AddressMPPT2WHR, conv_float_uint(MPPT2.WattHrs));
 		delayMs(1,3);
 	}
 }
@@ -626,14 +638,14 @@ void storeVariables (void)
 ** Returned value:		Data at address
 **
 ******************************************************************************/
-uint32_t EERead (uint32_t EERadd)
+uint32_t EERead (uint32_t _EEadd)
 {
 	uint32_t retDATA = 0;
 
-	retDATA = I2CRead(EERadd+3);
-	retDATA = (retDATA << 8) + I2CRead(EERadd+2);
-	retDATA = (retDATA << 8) + I2CRead(EERadd+1);
-	retDATA = (retDATA << 8) + I2CRead(EERadd+0);
+	retDATA = I2CRead(_EEadd+3);
+	retDATA = (retDATA << 8) + I2CRead(_EEadd+2);
+	retDATA = (retDATA << 8) + I2CRead(_EEadd+1);
+	retDATA = (retDATA << 8) + I2CRead(_EEadd+0);
 
 	return retDATA;
 }
@@ -721,14 +733,14 @@ void I2CWrite (uint32_t eeaddress, uint32_t data0, uint32_t data1, uint32_t data
 **
 ** Parameters:			1. Input data
 ** 						2. Existing data
-** 						MACRO - IIR_FILTER_GAIN - input gain
+** 						3. Gain factor - Default value -> IIR_FILTER_GAIN
 ** Returned value:		Smoothed value
 **
 ******************************************************************************/
-uint32_t iirFILTER (uint32_t newDATA, uint32_t oldDATA)
+uint32_t iirFILTER (uint32_t _data_in, uint32_t _cur_data, uint8_t _gain = IIR_FILTER_GAIN)
 {
-	uint8_t gain = IIR_FILTER_GAIN;
-	uint32_t _ret = (((gain-1)*oldDATA)+newDATA)/gain;
+	uint8_t gain = _gain;
+	uint32_t _ret = (((gain-1)*_cur_data)+_data_in)/gain;
 
 	return _ret;
 }
@@ -743,7 +755,7 @@ uint32_t iirFILTER (uint32_t newDATA, uint32_t oldDATA)
 **
 ******************************************************************************/
 void setPORTS (void)
-{
+{ // TODO: Update with new pins
 	//OUTPUTS:
 	// (BUZZER)|    (LCD_RS)|(LCD_E)
 	LPC_GPIO0->FIODIR = (1<<3)|    (1<<15)|(1<<16);
@@ -817,7 +829,7 @@ int main (void)
 	setPORTS();
 
 	setLCD();
-	lcdCLEAR();
+	lcd_clear();
 
 	I2C1Init();
 
@@ -829,11 +841,22 @@ int main (void)
 
 	BOD_Init();
 
-	displayINTRO();
+	lcd_display_intro();
 
 	recallVariables();
 
 	menuInit();
+
+	while (FORWARD || REVERSE)
+	{
+		lcd_display_errOnStart();
+		DUTYBL = 1000;
+		buzzer(700);
+
+		lcdClear();
+		DUTYBL = 0;
+		delay(1, 300);
+	}
 
 	while(1) { // Exiting this loop ends the program
 		if((ESC.ERROR & 0x2) && !STATS.SWOC_ACK) // on unacknowledged SWOC error, show error screen

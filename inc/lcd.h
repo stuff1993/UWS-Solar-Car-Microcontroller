@@ -27,7 +27,7 @@
 
 void setLCD(void);
 void lcd_putstring( unsigned char line, unsigned char Pos, char *string );
-void lcdCLEAR( void);
+void lcd_clear( void);
 void lcd_backlight_on(void);
 void lcd_backlight_off(void);
 void lcd_gotoxy(unsigned int x, unsigned int y);

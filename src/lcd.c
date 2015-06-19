@@ -57,7 +57,7 @@ void lcd_data_write( unsigned char data )
 	E_H; delayMs(1,1); E_L;		// Pulse the Enable Pin
 }
 
-void lcdCLEAR( void)
+void lcd_clear( void)
 {
 	lcd_command_write( 0x01 );
 	delayMs(1,2);
@@ -123,6 +123,6 @@ void setLCD( void )
 
 	lcd_gotoxy(0, 0);
 	delayMs(1,2);
-	lcdCLEAR();
+	lcd_clear();
 	delayMs(1,2);
 }

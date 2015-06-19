@@ -28,9 +28,12 @@ typedef enum {DISABLE = 0, ENABLE = !DISABLE} FunctionalState;
 
 // end type.h
 
+// TODO: Get actual radius
+// Reqs: Measure car
 #define WH_RADIUS_M (1)
 
 // TODO: Check pins
+// Reqs: New board schematics
 /// OUTPUTS
 #define BUZZER_ON		LPC_GPIO0->FIOSET = (1<<3);
 #define BUZZER_OFF		LPC_GPIO0->FIOCLR = (1<<3);
@@ -83,11 +86,10 @@ typedef enum {DISABLE = 0, ENABLE = !DISABLE} FunctionalState;
 /// EEPROM Addresses ///
 #define AddressBUZZ 	0
 #define AddressBL 		4
-#define AddressODOF		8
-#define AddressODOR		12
-#define AddressMPPT1WHR	16
-#define AddressBMUWHR	20
-#define AddressMPPT2WHR	24
+#define AddressODO		8
+#define AddressMPPT1WHR	12
+#define AddressBMUWHR	16
+#define AddressMPPT2WHR	20
 
 
 void BOD_IRQHandler(void);
@@ -100,8 +102,8 @@ void tx500CAN(void);
 void doCALCULATIONS(void);
 void recallVariables(void);
 void storeVariables(void);
-uint32_t EERead(uint32_t EERadd);
-void EEWrite(uint32_t add, uint32_t data);
+uint32_t EERead(uint32_t _EEadd);
+void EEWrite(uint32_t _EEadd, uint32_t data);
 uint32_t I2CRead(uint32_t eeaddress);
 void I2CWrite(uint32_t eeaddress, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3);
 uint32_t iirFILTER(uint32_t newDATA, uint32_t oldDATA);
