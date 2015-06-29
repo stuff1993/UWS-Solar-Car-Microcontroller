@@ -132,7 +132,7 @@ void SysTick_Handler (void)
 }
 
 /******************************************************************************
-** Function name:		pollMPPTCAN
+** Function name:		menu_mppt_poll
 **
 ** Description:			1. Sends request packet to MPPT (125K CAN Bus)
 ** 						2. Sends previous MPPT packet to car (500K CAN Bus)
@@ -142,7 +142,7 @@ void SysTick_Handler (void)
 ** Returned value:		None
 **
 ******************************************************************************/
-void pollMPPTCAN (void)
+void menu_mppt_poll (void)
 {
 	STATS.MPPT_POLL_COUNT ^= 0b1; 								// Toggle bit. Selects which MPPT to poll this round
 
@@ -198,10 +198,8 @@ void pollMPPTCAN (void)
 	if ( CAN2RxDone == TRUE )
 	{
 		CAN2RxDone = FALSE;
-
-		if		(MsgBuf_RX2.MsgID == MPPT1_REPLY){extractMPPTDATA(&MPPT1, &fakeMPPT1);}
-		else if	(MsgBuf_RX2.MsgID == MPPT2_REPLY){extractMPPTDATA(&MPPT2, &fakeMPPT2);}
-
+		if		(MsgBuf_RX2.MsgID == MPPT1_REPLY){mppt_data_extract(&MPPT1, &fakeMPPT1);}
+		else if	(MsgBuf_RX2.MsgID == MPPT2_REPLY){mppt_data_extract(&MPPT2, &fakeMPPT2);}
 
 		// Everything is correct, reset buffer
 		MsgBuf_RX2.Frame = 0x0;
@@ -212,7 +210,7 @@ void pollMPPTCAN (void)
 }
 
 /******************************************************************************
-** Function name:		extractMPPTDATA
+** Function name:		mppt_data_extract
 **
 ** Description:			Extracts data from CAN 2 Receive buffer into MPPT structure.
 **
@@ -221,7 +219,7 @@ void pollMPPTCAN (void)
 ** Returned value:		None
 **
 ******************************************************************************/
-void extractMPPTDATA (MPPT *_MPPT, fakeMPPTFRAME *_fkMPPT)
+void mppt_data_extract (MPPT *_MPPT, fakeMPPTFRAME *_fkMPPT)
 {
 	uint32_t _VIn = 0;
 	uint32_t _IIn = 0;
@@ -262,7 +260,7 @@ void extractMPPTDATA (MPPT *_MPPT, fakeMPPTFRAME *_fkMPPT)
 }
 
 /******************************************************************************
-** Function name:		checkBUTTONS
+** Function name:		menu_input_check
 **
 ** Description:			Checks majority of inputs (Switches, Left, Right)
 **
@@ -270,7 +268,7 @@ void extractMPPTDATA (MPPT *_MPPT, fakeMPPTFRAME *_fkMPPT)
 ** Returned value:		None
 **
 ******************************************************************************/
-void checkBUTTONS (void)
+void menu_input_check (void)
 {
 	unsigned char OLD_IO = SWITCH_IO;
 
@@ -315,7 +313,7 @@ void checkBUTTONS (void)
 }
 
 /******************************************************************************
-** Function name:		driveROUTINE
+** Function name:		menu_drive
 **
 ** Description:			Reads drive inputs and
 **
@@ -323,7 +321,7 @@ void checkBUTTONS (void)
 ** Returned value:		None
 **
 ******************************************************************************/
-void driveROUTINE (void)
+void menu_drive (void)
 {
 	uint32_t ADC_A;
 	uint32_t ADC_B;
@@ -424,7 +422,7 @@ void driveROUTINE (void)
 }
 
 /******************************************************************************
-** Function name:		checkMPPTCOMMS
+** Function name:		menu_mppt_comm_check
 **
 ** Description:			Resets MPPTs on disconnect
 **
@@ -432,7 +430,7 @@ void driveROUTINE (void)
 ** Returned value:		None
 **
 ******************************************************************************/
-void checkMPPTCOMMS (void)
+void menu_mppt_comm_check (void)
 {
 	if(!MPPT1.Connected)
 	{
@@ -470,6 +468,15 @@ void checkMPPTCOMMS (void)
 ******************************************************************************/
 void tx500CAN (void) // TODO: Rewrite
 {
+	/*
+	 * Handle custom packets in can.c, flag incoming flag type to check here.
+	 * Continue using this to send response packets
+	 *
+	 * Kill drive: use same loop to prevent drive logic running
+	 * Comm check: insert into menu loop to handle?
+	 *
+	 * Old power packets should be redundant if telemetry reads every CAN packet
+	 */
 	/* please note: FULLCAN identifier will NOT be received as it's not set
 	in the acceptance filter. */
 	if ( CAN1RxDone == TRUE )
@@ -478,7 +485,6 @@ void tx500CAN (void) // TODO: Rewrite
 
 		if((MsgBuf_RX1.MsgID == DASH_RQST) && (MsgBuf_RX1.DataA == 0x4C4C494B) && (MsgBuf_RX1.DataB == 0x45565244)) // Data = KILLDRVE
 		{
-
 			lcd_clear();
 			char buffer[20];
 
@@ -531,7 +537,7 @@ void tx500CAN (void) // TODO: Rewrite
 }
 
 /******************************************************************************
-** Function name:		doCALCULATIONS
+** Function name:		menu_calc
 **
 ** Description:			Calculates instantaneous values and peaks
 **
@@ -539,7 +545,7 @@ void tx500CAN (void) // TODO: Rewrite
 ** Returned value:		None
 **
 ******************************************************************************/
-void doCALCULATIONS (void)
+void menu_calc (void)
 {
 	// Calculate Power of components
 	ESC.Watts = ESC.Bus_V * ESC.Bus_I;
@@ -581,12 +587,12 @@ void doCALCULATIONS (void)
 void recallVariables (void)
 {
 	// Restore Non-Volatile Data
-	STATS.BUZZER = EERead(AddressBUZZ);
+	STATS.BUZZER = EE_Read(AddressBUZZ);
 
-	if(EERead(AddressBL) < 2000){PWMBL = EERead(AddressBL);}
-	else{PWMBL = 500;EEWrite(AddressBL, PWMBL);}
+	if(EE_Read(AddressBL) < 2000){PWMBL = EE_Read(AddressBL);}
+	else{PWMBL = 500;EE_Write(AddressBL, PWMBL);}
 
-	STATS.ODOMETER = conv_uint_float(EERead(AddressODOF));
+	STATS.ODOMETER = conv_uint_float(EE_Read(AddressODOF));
 	//STATS.ODOMETER_REV = convertToFloat(EERead(AddressODOR));
 	STATS.MAX_SPEED = 0;
 	STATS.RAMP_SPEED = 5;
@@ -594,9 +600,9 @@ void recallVariables (void)
 	STATS.CR_ACT = 0;
 	STATS.CR_STS = 0;
 
-	BMU.WattHrs = conv_uint_float(EERead(AddressBMUWHR));
-	MPPT1.WattHrs = conv_uint_float(EERead(AddressMPPT1WHR));
-	MPPT2.WattHrs = conv_uint_float(EERead(AddressMPPT2WHR));
+	BMU.WattHrs = conv_uint_float(EE_Read(AddressBMUWHR));
+	MPPT1.WattHrs = conv_uint_float(EE_Read(AddressMPPT1WHR));
+	MPPT2.WattHrs = conv_uint_float(EE_Read(AddressMPPT2WHR));
 }
 
 /******************************************************************************
@@ -612,7 +618,7 @@ void storeVariables (void)
 {
 	if(CLOCK.T_S % 2)
 	{
-		EEWrite(AddressODOF, conv_float_uint(STATS.ODOMETER));
+		EE_Write(AddressODOF, conv_float_uint(STATS.ODOMETER));
 		delayMs(1,3);
 		//EEWrite(AddressODOR, conv_float_uint(STATS.ODOMETER_REV));
 		//delayMs(1,3);
@@ -620,17 +626,17 @@ void storeVariables (void)
 
 	else
 	{
-		EEWrite(AddressBMUWHR, conv_float_uint(BMU.WattHrs));
+		EE_Write(AddressBMUWHR, conv_float_uint(BMU.WattHrs));
 		delayMs(1,3);
-		EEWrite(AddressMPPT1WHR, conv_float_uint(MPPT1.WattHrs));
+		EE_Write(AddressMPPT1WHR, conv_float_uint(MPPT1.WattHrs));
 		delayMs(1,3);
-		EEWrite(AddressMPPT2WHR, conv_float_uint(MPPT2.WattHrs));
+		EE_Write(AddressMPPT2WHR, conv_float_uint(MPPT2.WattHrs));
 		delayMs(1,3);
 	}
 }
 
 /******************************************************************************
-** Function name:		EERead
+** Function name:		EE_Read
 **
 ** Description:			Reads a word from EEPROM (Uses I2CRead)
 **
@@ -638,20 +644,20 @@ void storeVariables (void)
 ** Returned value:		Data at address
 **
 ******************************************************************************/
-uint32_t EERead (uint32_t _EEadd)
+uint32_t EE_Read (uint32_t _EEadd)
 {
 	uint32_t retDATA = 0;
 
-	retDATA = I2CRead(_EEadd+3);
-	retDATA = (retDATA << 8) + I2CRead(_EEadd+2);
-	retDATA = (retDATA << 8) + I2CRead(_EEadd+1);
-	retDATA = (retDATA << 8) + I2CRead(_EEadd+0);
+	retDATA = I2C_Read(_EEadd+3);
+	retDATA = (retDATA << 8) + I2C_Read(_EEadd+2);
+	retDATA = (retDATA << 8) + I2C_Read(_EEadd+1);
+	retDATA = (retDATA << 8) + I2C_Read(_EEadd+0);
 
 	return retDATA;
 }
 
 /******************************************************************************
-** Function name:		EEWrite
+** Function name:		EE_Write
 **
 ** Description:			Saves a word to EEPROM (Uses I2CWrite)
 **
@@ -660,18 +666,18 @@ uint32_t EERead (uint32_t _EEadd)
 ** Returned value:		None
 **
 ******************************************************************************/
-void EEWrite (uint32_t _EEadd, uint32_t _EEdata)
+void EE_Write (uint32_t _EEadd, uint32_t _EEdata)
 {
 	uint32_t temp1 = (_EEdata & 0x000000FF);
 	uint32_t temp2 = (_EEdata & 0x0000FF00) >> 8;
 	uint32_t temp3 = (_EEdata & 0x00FF0000) >> 16;
 	uint32_t temp4 = (_EEdata & 0xFF000000) >> 24;
 
-	I2CWrite(_EEadd, temp1,temp2,temp3,temp4);
+	I2C_Write(_EEadd, temp1,temp2,temp3,temp4);
 }
 
 /******************************************************************************
-** Function name:		I2CRead
+** Function name:		I2C_Read
 **
 ** Description:			Reads a byte from EEPROM
 **
@@ -679,7 +685,7 @@ void EEWrite (uint32_t _EEadd, uint32_t _EEdata)
 ** Returned value:		Data at address
 **
 ******************************************************************************/
-uint32_t I2CRead (uint32_t eeaddress)
+uint32_t I2C_Read (uint32_t _EEadd)
 {
 	int i;
 
@@ -692,7 +698,7 @@ uint32_t I2CRead (uint32_t eeaddress)
 	I2CReadLength[PORT_USED] = 1;
 	I2CMasterBuffer[PORT_USED][0] = _24LC256_ADDR;
 	I2CMasterBuffer[PORT_USED][1] = 0x00;	/* address */
-	I2CMasterBuffer[PORT_USED][2] = eeaddress;		/* address */
+	I2CMasterBuffer[PORT_USED][2] = _EEadd;		/* address */
 	I2CMasterBuffer[PORT_USED][3] = _24LC256_ADDR | RD_BIT;
 	I2CEngine( PORT_USED );
 	I2CStop(PORT_USED);
@@ -701,7 +707,7 @@ uint32_t I2CRead (uint32_t eeaddress)
 }
 
 /******************************************************************************
-** Function name:		I2CWrite
+** Function name:		I2C_Write
 **
 ** Description:			Saves a byte to EEPROM
 **
@@ -710,13 +716,13 @@ uint32_t I2CRead (uint32_t eeaddress)
 ** Returned value:		None
 **
 ******************************************************************************/
-void I2CWrite (uint32_t eeaddress, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3)
+void I2C_Write (uint32_t _EEadd, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3)
 {
 	I2CWriteLength[PORT_USED] = 7;
 	I2CReadLength[PORT_USED] = 0;
 	I2CMasterBuffer[PORT_USED][0] = _24LC256_ADDR;
 	I2CMasterBuffer[PORT_USED][1] = 0x00;			/* address */
-	I2CMasterBuffer[PORT_USED][2] = eeaddress;	/* address */
+	I2CMasterBuffer[PORT_USED][2] = _EEadd;	/* address */
 	I2CMasterBuffer[PORT_USED][3] = data0;
 	I2CMasterBuffer[PORT_USED][4] = data1;
 	I2CMasterBuffer[PORT_USED][5] = data2;
@@ -738,15 +744,10 @@ void I2CWrite (uint32_t eeaddress, uint32_t data0, uint32_t data1, uint32_t data
 **
 ******************************************************************************/
 uint32_t iirFILTER (uint32_t _data_in, uint32_t _cur_data, uint8_t _gain = IIR_FILTER_GAIN)
-{
-	uint8_t gain = _gain;
-	uint32_t _ret = (((gain-1)*_cur_data)+_data_in)/gain;
-
-	return _ret;
-}
+{return (((_gain-1)*_cur_data)+_data_in)/_gain;}
 
 /******************************************************************************
-** Function name:		setPORTS
+** Function name:		init_GPIO
 **
 ** Description:			Configures pins to be used for GPIO
 **
@@ -754,7 +755,7 @@ uint32_t iirFILTER (uint32_t _data_in, uint32_t _cur_data, uint8_t _gain = IIR_F
 ** Returned value:		None
 **
 ******************************************************************************/
-void setPORTS (void)
+void init_GPIO (void)
 { // TODO: Update with new pins
 	//OUTPUTS:
 	// (BUZZER)|    (LCD_RS)|(LCD_E)
@@ -826,7 +827,7 @@ int main (void)
 	SysTick_Config(SystemCoreClock / 100);		// 10mS Systicker.
 
 	ADCInit(ADC_CLK);
-	setPORTS();
+	init_GPIO();
 
 	setLCD();
 	lcd_clear();
@@ -877,12 +878,12 @@ int main (void)
 			MENU.menus[MENU_POS]();
 		}
 
-		pollMPPTCAN();
-		checkBUTTONS();
-		driveROUTINE();
-		checkMPPTCOMMS();
+		menu_mppt_poll();
+		menu_input_check();
+		menu_drive();
+		menu_mppt_comm_check();
 		tx500CAN();
-		doCALCULATIONS();
+		menu_calc();
     }
 
     return 0; // For compilers sanity

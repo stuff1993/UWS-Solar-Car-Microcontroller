@@ -93,21 +93,21 @@ typedef enum {DISABLE = 0, ENABLE = !DISABLE} FunctionalState;
 
 
 void BOD_IRQHandler(void);
-void pollMPPTCAN(void);
-void extractMPPTDATA(MPPT *_MPPT, fakeMPPTFRAME *_fkMPPT);
-void checkBUTTONS(void);
-void driveROUTINE(void);
-void checkMPPTCOMMS(void);
+void menu_mppt_poll(void);
+void mppt_data_extract(MPPT *_MPPT, fakeMPPTFRAME *_fkMPPT);
+void menu_input_check(void);
+void menu_drive(void);
+void menu_mppt_comm_check(void);
 void tx500CAN(void);
-void doCALCULATIONS(void);
+void menu_calc(void);
 void recallVariables(void);
 void storeVariables(void);
-uint32_t EERead(uint32_t _EEadd);
-void EEWrite(uint32_t _EEadd, uint32_t data);
-uint32_t I2CRead(uint32_t eeaddress);
-void I2CWrite(uint32_t eeaddress, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3);
+uint32_t EE_Read(uint32_t _EEadd);
+void EE_Write(uint32_t _EEadd, uint32_t data);
+uint32_t I2C_Read(uint32_t _EEadd);
+void I2C_Write(uint32_t _EEadd, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3);
 uint32_t iirFILTER(uint32_t newDATA, uint32_t oldDATA);
-void setPORTS(void);
+void init_GPIO(void);
 void buzzer(uint32_t val);
 void BOD_Init(void);
 

@@ -987,7 +987,7 @@ void lcd_display_other (void) // menus[11]
 		if(SELECT)
 		{
 			MENU.SELECTED = 0;
-			EEWrite(AddressBUZZ, STATS.BUZZER);
+			EE_Write(AddressBUZZ, STATS.BUZZER);
 		}
 		else if(INCREMENT)
 		{
