@@ -48,7 +48,6 @@ volatile unsigned char SWITCH_IO	= 0;
 
 uint16_t THR_POS = 0;
 uint16_t RGN_POS = 0;
-uint8_t MECH_BRAKE = 0;
 
 uint16_t PWMBL 	= 0;
 
@@ -95,7 +94,7 @@ void SysTick_Handler (void)
 
 	if (CLOCK.T_mS % 10 == 0) // Every 100 mS
 	{
-		// TODO: Transmit drive CAN packet
+		// TODO: Transmit drive CAN packet + Ignition
 		MsgBuf_TX1.Frame = 0x00080000;
 		MsgBuf_TX1.MsgID = ESC_BASE + 1;
 		MsgBuf_TX1.DataA = conv_float_uint(DRIVE.Speed_RPM);
@@ -325,12 +324,11 @@ void menu_drive (void)
 {
 	uint32_t ADC_A;
 	uint32_t ADC_B;
-	uint32_t ADC_C;
 
 	////////////// THROTTLE ////////////////
 	if(!CRUISE.ACTIVE)
 	{
-		ADC_A = (ADCRead(2) + ADCRead(2) + ADCRead(2) + ADCRead(2) + ADCRead(2) + ADCRead(2) + ADCRead(2) + ADCRead(2))/8;
+		ADC_A = (ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0))/8;
 
 		THR_POS = (1500 - ADC_A);
 		THR_POS = (THR_POS * 9)/10;
@@ -348,13 +346,6 @@ void menu_drive (void)
 	if(RGN_POS > 1000){RGN_POS = 1000;}
 	if(RGN_POS){STATS.CR_ACT = OFF;}
 
-	////////////// MECH BRAKE ////////////////
-	ADC_C = (ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0))/8;
-
-	if(ADC_C > 2000){MECH_BRAKE = TRUE;STATS.CR_ACT = OFF;}
-	else{MECH_BRAKE = FALSE;}
-
-
 	////////////// DRIVE LOGIC ////////////////
 	if (!MECH_BRAKE && (FORWARD || REVERSE)){
 		if(!STATS.CR_ACT && FORWARD && !RGN_POS && ((DRIVE.Current * 1000) < THR_POS))		{DRIVE.Speed_RPM = 30000; DRIVE.Current += (STATS.RAMP_SPEED / 1000.0);}
@@ -366,21 +357,6 @@ void menu_drive (void)
 		else if(STATS.CR_ACT){DRIVE.Current = 1.0; DRIVE.Speed_RPM = STATS.CRUISE_SPEED / ((60 * 3.14 * WH_RADIUS_M) / 1000.0);}
 		else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}}
 	else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}
-
-	/*
-	if(!MECH_BRAKE && (FORWARD || REVERSE)){
-		if(!CRUISE_CHECK && !RGN_POS && PWMA < THR_POS){PWMA += STATS.RAMP_SPEED;PWMC = 0;}
-		else if(!CRUISE_CHECK && !RGN_POS){PWMA = THR_POS;PWMC = 0;}
-		else if(!CRUISE_CHECK && RGN_POS && PWMC < RGN_POS){PWMC += REGEN_RAMP_SPEED;PWMA = 0;}
-		else if(!CRUISE_CHECK && RGN_POS){PWMC = RGN_POS/2;PWMA = 0;}
-		else if(CRUISE_CHECK && (CRUISE.CO > 1000) && (PWMA < (CRUISE.CO - 1000))){PWMA += STATS.RAMP_SPEED;PWMC = 0;}
-		else if(CRUISE_CHECK && (CRUISE.CO > 1000)){PWMA = (CRUISE.CO - 1000);PWMC = 0;}
-		else if(CRUISE_CHECK && (CRUISE.CO < 1000) && (PWMC < (1000 - CRUISE.CO))){PWMC += REGEN_RAMP_SPEED;PWMA = 0;}
-		else if(CRUISE_CHECK && (CRUISE.CO < 1000)){PWMC = ((1000 - CRUISE.CO) / 2);PWMA = 0;}
-		else if(CRUISE_CHECK && CRUISE.CO == 1000){PWMA = 0; PWMC = 0;}
-		else{PWMA = 0;PWMB = 0;PWMC = 0;}}
-	else{PWMA = 0;PWMB = 0;PWMC = 0;}
-	 */
 
 	////////////// LIGHTS ////////////////
 	if(MECH_BRAKE || RGN_POS){BRAKELIGHT_ON;}
@@ -409,12 +385,7 @@ void menu_drive (void)
 		{REVERSE_OFF;NEUTRAL_ON;REGEN_OFF;DRIVE_OFF;}
 	}
 
-	////////////// UPDATE OUTPUTS ////////////////
-	DUTYBL = PWMBL;
-	// reset DAC registers.
-	LPC_PWM1->LER = LER6_EN;
-
-
+	// TODO: Move to CAN Rx
 	if(ESC.Velocity_KMH > STATS.MAX_SPEED)
 	{
 		STATS.MAX_SPEED = ESC.Velocity_KMH;
@@ -593,7 +564,6 @@ void recallVariables (void)
 	else{PWMBL = 500;EE_Write(AddressBL, PWMBL);}
 
 	STATS.ODOMETER = conv_uint_float(EE_Read(AddressODOF));
-	//STATS.ODOMETER_REV = convertToFloat(EERead(AddressODOR));
 	STATS.MAX_SPEED = 0;
 	STATS.RAMP_SPEED = 5;
 	STATS.CRUISE_SPEED = 0;
@@ -620,8 +590,6 @@ void storeVariables (void)
 	{
 		EE_Write(AddressODOF, conv_float_uint(STATS.ODOMETER));
 		delayMs(1,3);
-		//EEWrite(AddressODOR, conv_float_uint(STATS.ODOMETER_REV));
-		//delayMs(1,3);
 	}
 
 	else
@@ -679,7 +647,7 @@ void EE_Write (uint32_t _EEadd, uint32_t _EEdata)
 /******************************************************************************
 ** Function name:		I2C_Read
 **
-** Description:			Reads a byte from EEPROM
+** Description:			Reads a word from EEPROM
 **
 ** Parameters:			Address to read from
 ** Returned value:		Data at address
@@ -709,7 +677,7 @@ uint32_t I2C_Read (uint32_t _EEadd)
 /******************************************************************************
 ** Function name:		I2C_Write
 **
-** Description:			Saves a byte to EEPROM
+** Description:			Saves a word to EEPROM
 **
 ** Parameters:			1. Address to save to
 ** 						2. Data to save
@@ -756,23 +724,70 @@ uint32_t iirFILTER (uint32_t _data_in, uint32_t _cur_data, uint8_t _gain = IIR_F
 **
 ******************************************************************************/
 void init_GPIO (void)
-{ // TODO: Update with new pins
-	//OUTPUTS:
-	// (BUZZER)|    (LCD_RS)|(LCD_E)
-	LPC_GPIO0->FIODIR = (1<<3)|    (1<<15)|(1<<16);
-	LPC_GPIO0->FIOCLR = (1<<3)|    (1<<15)|(1<<16);
+{
+	/* GPIO0:
+	 * 	PINSEL0:
+	 * 		0 - IN - RIGHT
+	 * 		1 - IN - INC/UP
+	 * 		3 - OUT - Buzzer
+	 * 		10 - IN - REVERSE
+	 * 		11 - IN - FORWARD
+	 * 		15 - OUT - LCD Reset
+	 * 	PINSEL1:
+	 * 		16 - OUT - LCD Enable
+	 * 		25 - IN - Mech Brake
+	 * 		27 - OUT - Fault LED
+	 */
+	LPC_GPIO0->FIODIR = (1<<3)|(1<<15)|(1<<16)|(1<<27);
+	LPC_GPIO0->FIOCLR = (1<<3)|(1<<15)|(1<<16)|(1<<27);
 
-	// (BRAKE_OUT)|(GEAR1)|(GEAR2)|(GEAR3)|(REVERSE)
-	LPC_GPIO1->FIODIR = (1<<21)|(1<<23)|(1<<24)|(1<<25)|(1<<26);
-	LPC_GPIO1->FIOCLR = (1<<21)|(1<<23)|(1<<24)|(1<<25)|(1<<26);
+	/*
+	 * GPIO1:
+	 * 	PINSEL2:
+	 * 		0 - IN - RIGHT_ON
+	 * 		1 - IN - LEFT_ON
+	 * 		4 - OUT - Power LED
+	 * 		8 - IN - Armed Status
+	 * 	PINSEL3:
+	 * 		19 - OUT - Blinker R
+	 * 		20 - OUT - Blinker L
+	 * 		21 - OUT - Brake Light
+	 * 		23 - OUT - Reverse LED
+	 * 		24 - OUT - Neutral LED
+	 * 		25 - OUT - Regen LED
+	 * 		26 - OUT - Drive LED
+	 * 		27 - IN - LEFT
+	 * 		28 - IN - DEC/DOWN
+	 * 		29 - IN - SELECT
+	 * 		30 - OUT - ECO LED
+	 * 		31 - OUT - SPORTS LED
+	 */
+	LPC_GPIO1->FIODIR = (1<<4)|(1<<19)|(1<<20)|(1<<21)|(1<<23)|(1<<24)|(1<<25)|(1<<26)|(1<<30)|(1<<31);
+	LPC_GPIO1->FIOCLR = (1<<4)|(1<<19)|(1<<20)|(1<<21)|(1<<23)|(1<<24)|(1<<25)|(1<<26)|(1<<30)|(1<<31);
 
-	//              (LCD_BL)|(LCD_D7)|(LCD_D6)|(LCD_D5)|(LCD_D4)
-	LPC_GPIO2->FIODIR = (1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9);
-	LPC_GPIO2->FIOCLR = (1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9);
+	/*
+	 * GPIO2:
+	 * 	PINSEL4:
+	 * 		6 - OUT - LCD D7
+	 * 		7 - OUT - LCD D6
+	 * 		8 - OUT - LCD D5
+	 * 		9 - OUT - LCD D4
+	 * 		10 - IN - Aux ON (SPORTS MODE)
+	 * 		11 - IN - Aux OFF
+	 * 		12 - IN - Spare switch
+	 * 		13 - IN - Spare switch
+	 */
+	LPC_GPIO2->FIODIR = (1<<6)|(1<<7)|(1<<8)|(1<<9);
+	LPC_GPIO2->FIOCLR = (1<<6)|(1<<7)|(1<<8)|(1<<9);
 
-	//INPUTS:
-	// CAN BUS @ PORT_0 (1<<4)|(1<<5)|(1<<21)|(1<<22)|(CAN RD2)|(CAN TD2)|(CAN_RD1)|(CAN_TD2)
-	// ANALOG_IN @ PORT_0 (1<<23)|(1<<24)|(1<<25)
+	/*
+	 * GPIO3:
+	 * 	PINSEL7:
+	 * 		25 - OUT - Left LED
+	 * 		26 - OUT - Right LED
+	 */
+	LPC_GPIO3->FIODIR = (1<<25)|(1<<26);
+	LPC_GPIO3->FIOCLR = (1<<25)|(1<<26);
 }
 
 /******************************************************************************

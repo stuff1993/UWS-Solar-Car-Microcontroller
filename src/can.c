@@ -541,7 +541,7 @@ uint32_t CAN1_SendMessage( CAN_MSG *pTxBuf )
 	LPC_CAN1->TID1 = pTxBuf->MsgID;
 	LPC_CAN1->TDA1 = pTxBuf->DataA;
 	LPC_CAN1->TDB1 = pTxBuf->DataB;
-	LPC_CAN1->CMR = 0x21;
+	LPC_CAN1->CMR |= 0x21;
 	return ( TRUE );
   }
   else if ( CANStatus & 0x00000400 )
@@ -550,7 +550,7 @@ uint32_t CAN1_SendMessage( CAN_MSG *pTxBuf )
 	LPC_CAN1->TID2 = pTxBuf->MsgID;
 	LPC_CAN1->TDA2 = pTxBuf->DataA;
 	LPC_CAN1->TDB2 = pTxBuf->DataB;
-	LPC_CAN1->CMR = 0x41;
+	LPC_CAN1->CMR |= 0x41;
 	return ( TRUE );
   }
   else if ( CANStatus & 0x00040000 )
@@ -559,7 +559,7 @@ uint32_t CAN1_SendMessage( CAN_MSG *pTxBuf )
 	LPC_CAN1->TID3 = pTxBuf->MsgID;
 	LPC_CAN1->TDA3 = pTxBuf->DataA;
 	LPC_CAN1->TDB3 = pTxBuf->DataB;
-	LPC_CAN1->CMR = 0x81;
+	LPC_CAN1->CMR |= 0x81;
 	return ( TRUE );
   }
   return ( FALSE );
@@ -588,7 +588,7 @@ uint32_t CAN2_SendMessage( CAN_MSG *pTxBuf )
 	LPC_CAN2->TID1 = pTxBuf->MsgID;
 	LPC_CAN2->TDA1 = pTxBuf->DataA;
 	LPC_CAN2->TDB1 = pTxBuf->DataB;
-	LPC_CAN2->CMR = 0x21;
+	LPC_CAN2->CMR |= 0x21;
 	return ( TRUE );
   }
   else if ( CANStatus & 0x00000400 )
@@ -597,7 +597,7 @@ uint32_t CAN2_SendMessage( CAN_MSG *pTxBuf )
 	LPC_CAN2->TID2 = pTxBuf->MsgID;
 	LPC_CAN2->TDA2 = pTxBuf->DataA;
 	LPC_CAN2->TDB2 = pTxBuf->DataB;
-	LPC_CAN2->CMR = 0x41;
+	LPC_CAN2->CMR |= 0x41;
 	return ( TRUE );
   }
   else if ( CANStatus & 0x00040000 )
@@ -606,7 +606,7 @@ uint32_t CAN2_SendMessage( CAN_MSG *pTxBuf )
 	LPC_CAN2->TID3 = pTxBuf->MsgID;
 	LPC_CAN2->TDA3 = pTxBuf->DataA;
 	LPC_CAN2->TDB3 = pTxBuf->DataB;
-	LPC_CAN2->CMR = 0x81;
+	LPC_CAN2->CMR |= 0x81;
 	return ( TRUE );
   }
   return ( FALSE );

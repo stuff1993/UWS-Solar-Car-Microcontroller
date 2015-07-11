@@ -987,7 +987,16 @@ void lcd_display_other (void) // menus[11]
 		if(SELECT)
 		{
 			MENU.SELECTED = 0;
-			EE_Write(AddressBUZZ, STATS.BUZZER);
+			switch(MENU.ITEM_SELECTOR)
+			{
+			case 0:
+				EE_Write(AddressBUZZ, STATS.BUZZER);
+				break;
+			case 1:
+				EE_Write(AddressBL, PWMBL);
+				break;
+			}
+
 		}
 		else if(INCREMENT)
 		{
@@ -1000,6 +1009,7 @@ void lcd_display_other (void) // menus[11]
 			case 1:
 				if(PWMBL > 1000){PWMBL += 10;}
 				else if (PWMBL >= 1000){PWMBL = 1000;buzzer(200);}
+				DUTYBL = PWMBL;
 				break;
 			default:
 				break;
@@ -1016,6 +1026,7 @@ void lcd_display_other (void) // menus[11]
 			case 1:
 				if(PWMBL > 0){PWMBL -= 10;}
 				else if(PWMBL <= 0){PWMBL = 0;buzzer(200);}
+				DUTYBL = PWMBL;
 				break;
 			default:
 				break;
@@ -1218,7 +1229,6 @@ void lcd_display_HWOC (void) // errors[1]
 			MsgBuf_TX1.DataB = 0x0;
 			MsgBuf_TX1.DataA = 0x0;
 			CAN1_SendMessage( &MsgBuf_TX1 );
-			buzzer(20);
 		}
 	}
 	else if(INCREMENT || DECREMENT){STATS.HWOC_ACK = TRUE;}// mark error acknowledged

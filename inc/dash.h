@@ -32,40 +32,70 @@ typedef enum {DISABLE = 0, ENABLE = !DISABLE} FunctionalState;
 // Reqs: Measure car
 #define WH_RADIUS_M (1)
 
-// TODO: Check pins
-// Reqs: New board schematics
 /// OUTPUTS
 #define BUZZER_ON		LPC_GPIO0->FIOSET = (1<<3);
 #define BUZZER_OFF		LPC_GPIO0->FIOCLR = (1<<3);
 
-#define REVERSE_ON		LPC_GPIO1->FIOSET = (1<<26);		// gear4
-#define REVERSE_OFF		LPC_GPIO1->FIOCLR = (1<<26);
+#define FAULT_ON		LPC_GPIO0->FIOSET = (1<<27);
+#define FAULT_OFF		LPC_GPIO0->FIOCLR = (1<<27);
 
-#define NEUTRAL_ON		LPC_GPIO1->FIOSET = (1<<25);		// gear3
-#define NEUTRAL_OFF		LPC_GPIO1->FIOCLR = (1<<25);
+#define POWER_ON		LPC_GPIO1->FIOSET = (1<<4);
+#define POWER_OFF		LPC_GPIO1->FIOCLR = (1<<4);
 
-#define REGEN_ON		LPC_GPIO1->FIOSET = (1<<24);		// gear2
-#define REGEN_OFF		LPC_GPIO1->FIOCLR = (1<<24);
+#define BLINKER_R_ON	LPC_GPIO1->FIOSET = (1<<19);LPC_GPIO3->FIOSET = (1<<26);
+#define BLINKER_R_OFF	LPC_GPIO1->FIOCLR = (1<<19);LPC_GPIO3->FIOCLR = (1<<26);
 
-#define DRIVE_ON		LPC_GPIO1->FIOSET = (1<<23);		// gear1
-#define DRIVE_OFF		LPC_GPIO1->FIOCLR = (1<<23);
+#define BLINKER_L_ON	LPC_GPIO1->FIOSET = (1<<20);LPC_GPIO3->FIOSET = (1<<25);
+#define BLINKER_L_OFF	LPC_GPIO1->FIOCLR = (1<<20);LPC_GPIO3->FIOCLR = (1<<25);
 
 #define BRAKELIGHT_ON	LPC_GPIO1->FIOSET = (1<<21);
 #define BRAKELIGHT_OFF	LPC_GPIO1->FIOCLR = (1<<21);
 
+#define REVERSE_ON		LPC_GPIO1->FIOSET = (1<<23);
+#define REVERSE_OFF		LPC_GPIO1->FIOCLR = (1<<23);
+
+#define NEUTRAL_ON		LPC_GPIO1->FIOSET = (1<<24);
+#define NEUTRAL_OFF		LPC_GPIO1->FIOCLR = (1<<24);
+
+#define REGEN_ON		LPC_GPIO1->FIOSET = (1<<25);
+#define REGEN_OFF		LPC_GPIO1->FIOCLR = (1<<25);
+
+#define DRIVE_ON		LPC_GPIO1->FIOSET = (1<<26);
+#define DRIVE_OFF		LPC_GPIO1->FIOCLR = (1<<26);
+
+#define ECO_ON			LPC_GPIO1->FIOSET = (1<<30);
+#define ECO_OFF			LPC_GPIO1->FIOCLR = (1<<30);
+
+#define SPORTS_ON		LPC_GPIO1->FIOSET = (1<<31);
+#define SPORTS_OFF		LPC_GPIO1->FIOCLR = (1<<31);
+
 #define DUTYBL			LPC_PWM1->MR6
 
+#define HAZARDS_ON		BLINKER_R_ON;BLINKER_L_ON;
+#define HAZARDS_OFF		BLINKER_R_OFF;BLINKER_L_OFF;
+
 /// INPUTS
+#define MECH_BRAKE		!(LPC_GPIO0->FIOPIN & (1<<25))
+
+#define RIGHT 			!(LPC_GPIO0->FIOPIN & (1<<0))
 #define INCREMENT 		!(LPC_GPIO0->FIOPIN & (1<<1))
-#define DECREMENT		!(LPC_GPIO1->FIOPIN & (1<<27))
+#define LEFT 			!(LPC_GPIO1->FIOPIN & (1<<27))
+#define DECREMENT		!(LPC_GPIO1->FIOPIN & (1<<28))
 #define SELECT 			!(LPC_GPIO1->FIOPIN & (1<<29))
-#define RIGHT 			!(LPC_GPIO1->FIOPIN & (1<<28))
-#define LEFT 			!(LPC_GPIO0->FIOPIN & (1<<0))
 
-#define FORWARD 		!(LPC_GPIO0->FIOPIN & (1<<10))
-#define REVERSE 		!(LPC_GPIO0->FIOPIN & (1<<11))
+#define FORWARD 		!(LPC_GPIO0->FIOPIN & (1<<11))
+#define REVERSE 		!(LPC_GPIO0->FIOPIN & (1<<10))
 
-#define SPORTS_MODE		!(LPC_GPIO2->FIOPIN & (1<<11))
+#define SPORTS_MODE		!(LPC_GPIO2->FIOPIN & (1<<10)) // Aux_ON
+#define ECONOMY_MODE	!(LPC_GPIO2->FIOPIN & (1<<11)) // Aux_OFF
+
+#define CC_ON			!(LPC_GPIO2->FIOPIN & (1<<12))
+#define CC_OFF			!(LPC_GPIO2->FIOPIN & (1<<13))
+
+#define ARMED			!(LPC_GPIO1->FIOPIN & (1<<8))
+
+#define LEFT_ON			!(LPC_GPIO1->FIOPIN & (1<<1))
+#define RIGHT_ON		!(LPC_GPIO1->FIOPIN & (1<<2))
 
 
 #define IIR_FILTER_GAIN	16
