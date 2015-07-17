@@ -90,7 +90,7 @@ void lcd_display_info (void) // menus[0]
 	sprintf(buffer, "-INFO-");
 	_lcd_putTitle(buffer);
 
-	sprintf(buffer, "SOLACE DashBOARD2.0 ");
+	sprintf(buffer, "NEWCAR DashBOARD2.0 ");
 	lcd_putstring(1,0, buffer);
 
 	sprintf(buffer, "HW Version: 2.0a    ");
@@ -110,7 +110,7 @@ void lcd_display_info (void) // menus[0]
 **
 ******************************************************************************/
 void lcd_display_escBus (void) // menus[1]
-{// TODO: CHANGE TO CONTROL PRECHARGE
+{
 	char buffer[20];
 
 	sprintf(buffer, "-ESC BUS-");
@@ -122,16 +122,7 @@ void lcd_display_escBus (void) // menus[1]
 	sprintf(buffer, "BAT VOLTAGE: %03lu V  ", BMU.Battery_I);
 	lcd_putstring(2,0, buffer);
 
-	if((BMU.Battery_V - ESC.Bus_V) < 10)
-	{
-		sprintf(buffer, "  **SAFE TO BOOT**  ");
-		lcd_putstring(3,0, buffer);
-	}
-	else
-	{
-		sprintf(buffer, "                    ");
-		lcd_putstring(3,0, buffer);
-	}
+
 }
 
 /******************************************************************************
@@ -155,7 +146,6 @@ void lcd_display_home (void) // menus[2]
 		sprintf(buffer, "DRIVE MODE:  SPORTS ");
 		lcd_putstring(1,0, buffer);
 	}
-
 	else
 	{
 		sprintf(buffer, "DRIVE MODE: ECONOMY ");
@@ -188,19 +178,12 @@ void lcd_display_home (void) // menus[2]
 		lcd_putstring(2,0, buffer);}
 
 	// If no ERRORS then display MPPT Watts
-	// TODO: ??? check all errors?
-
-	if(ESC.ERROR)
-	{
-		sprintf(buffer, "ESC  FAULT          ");
-		lcd_putstring(3,0, buffer);
-	}
-
-	else
-	{
-		sprintf(buffer, "ARRAY:    %3.1f W  ", MPPT2.Watts+MPPT1.Watts);
-		lcd_putstring(3,0, buffer);
-	}
+	if(ESC.ERROR)						{sprintf(buffer, "ESC  FAULT          ");}
+	else if (MPPT1.UNDV || MPPT1.OVT)	{sprintf(buffer, "MPPT1  FAULT        ");}
+	else if (MPPT2.UNDV || MPPT2.OVT)	{sprintf(buffer, "MPPT2  FAULT        ");}
+	else if (BMU.Status & 0x00001FBF)	{sprintf(buffer, "BMU  FAULT          ");}
+	else								{sprintf(buffer, "ARRAY:    %3.1f W  ", MPPT2.Watts+MPPT1.Watts);}
+	lcd_putstring(3,0, buffer);
 }
 
 /******************************************************************************
@@ -260,241 +243,81 @@ void lcd_display_drive (void) // menus[3]
 **
 ******************************************************************************/
 void lcd_display_cruise (void) // menus[4]
-{// TODO: MAJOR REWORK FOR WS CRUISE
+{
 	char buffer[20];
+	sprintf(buffer, "-CRUISE-");
+	_lcd_putTitle(buffer);
 
-	if (MENU.SUBMENU_POS == 0) // Cruise Menu
+	if (!REVERSE)
 	{
-		sprintf(buffer, "-CRUISE-");
-		_lcd_putTitle(buffer);
-		if (!REVERSE)
+		if (STATS.CR_STS && STATS.CR_ACT)
 		{
-			if (STATS.CR_STS && STATS.CR_ACT)
-			{
-				sprintf(buffer, " STS:  ON  ACT:  ON ");
-				lcd_putstring(1,0, buffer);
+			sprintf(buffer, " STS:  ON  ACT:  ON ");
+			lcd_putstring(1,0, buffer);
 
-				sprintf(buffer, " SET: %3.0f  THR:%3d%% ", STATS.CRUISE_SPEED, PWMA/10);
-				lcd_putstring(2,0, buffer);
+			sprintf(buffer, " SET: %3.0f  SPD: %3.0f ", STATS.CRUISE_SPEED, ESC.Velocity_KMH);
+			lcd_putstring(2,0, buffer);
 
-				sprintf(buffer, " SPD: %3.0f  RGN:%3d%% ", ESC.Velocity_KMH, PWMC/10);
-				lcd_putstring(3,0, buffer);
-
-				// Button presses
-				if (SELECT){STATS.CR_ACT = OFF;}
-				else if (INCREMENT){STATS.CRUISE_SPEED += 1;}
-				else if (DECREMENT){STATS.CRUISE_SPEED -= 1;}
-			}
-			else if (STATS.CR_STS && !STATS.CR_ACT)
-			{
-				sprintf(buffer, " STS:  ON  ACT: OFF ");
-				lcd_putstring(1,0, buffer);
-
-				sprintf(buffer, " SET: %3.0f  THR:     ", STATS.CRUISE_SPEED);
-				lcd_putstring(2,0, buffer);
-
-				sprintf(buffer, " SPD: %3.0f  RGN:     ", ESC.Velocity_KMH);
-				lcd_putstring(3,0, buffer);
-
-				// Button presses
-				if (SELECT){STATS.CR_STS = OFF;STATS.CRUISE_SPEED = 0;}
-				else if (INCREMENT && (STATS.CRUISE_SPEED > 1)){STATS.CR_ACT = ON;}
-				else if (DECREMENT){STATS.CRUISE_SPEED = ESC.Velocity_KMH;STATS.CR_ACT = ON;}
-			}
-			else if (STATS.CR_ACT && !STATS.CR_STS) // Should never trip, but just in case
-			{
-				sprintf(buffer, " STS: OFF  ACT:  ON ");
-				lcd_putstring(1,0, buffer);
-
-				sprintf(buffer, "    CRUISE ERROR    ");
-				lcd_putstring(2,0, buffer);
-
-				sprintf(buffer, "     RESETTING      ");
-				lcd_putstring(3,0, buffer);
-
-				STATS.CR_ACT = OFF;
-				STATS.CR_STS = OFF;
-				STATS.CRUISE_SPEED = 0;
-			}
-			else
-			{
-				sprintf(buffer, " STS: OFF  ACT: OFF ");
-				lcd_putstring(1,0, buffer);
-
-				sprintf(buffer, " SET:      THR:     ");
-				lcd_putstring(2,0, buffer);
-
-				sprintf(buffer, " SPD: %3.0f  RGN:     ", ESC.Velocity_KMH);
-				lcd_putstring(3,0, buffer);
-
-				// Button presses
-				if (SELECT){STATS.CRUISE_SPEED = 0;STATS.CR_STS = ON;}
-				else if (INCREMENT || DECREMENT){MENU.SUBMENU_POS++;}
-			}
+			// Button presses
+			if (SELECT){STATS.CR_ACT = OFF;}
+			else if (INCREMENT){STATS.CRUISE_SPEED += 1;}
+			else if (DECREMENT){STATS.CRUISE_SPEED -= 1;}
 		}
-		else // no cruise in reverse
+		else if (STATS.CR_STS && !STATS.CR_ACT)
+		{
+			sprintf(buffer, " STS:  ON  ACT: OFF ");
+			lcd_putstring(1,0, buffer);
+
+			sprintf(buffer, " SET: %3.0f  SPD: %3.0f ", STATS.CRUISE_SPEED, ESC.Velocity_KMH);
+			lcd_putstring(2,0, buffer);
+
+			// Button presses
+			if (SELECT){STATS.CR_STS = OFF;STATS.CRUISE_SPEED = 0;}
+			else if (INCREMENT && (STATS.CRUISE_SPEED > 1)){STATS.CR_ACT = ON;}
+			else if (DECREMENT){STATS.CRUISE_SPEED = ESC.Velocity_KMH;STATS.CR_ACT = ON;}
+		}
+		else if (STATS.CR_ACT && !STATS.CR_STS) // Should never trip, but just in case
+		{
+			sprintf(buffer, " STS: OFF  ACT:  ON ");
+			lcd_putstring(1,0, buffer);
+
+			sprintf(buffer, "    CRUISE ERROR    ");
+			lcd_putstring(2,0, buffer);
+
+			sprintf(buffer, "     RESETTING      ");
+			lcd_putstring(3,0, buffer);
+
+			STATS.CR_ACT = OFF;
+			STATS.CR_STS = OFF;
+			STATS.CRUISE_SPEED = 0;
+		}
+		else
 		{
 			sprintf(buffer, " STS: OFF  ACT: OFF ");
 			lcd_putstring(1,0, buffer);
 
-			sprintf(buffer, "  REVERSE ENGAGED!  ");
+			sprintf(buffer, " SET:      SPD: %3.0f ", ESC.Velocity_KMH);
 			lcd_putstring(2,0, buffer);
 
-			sprintf(buffer, "                    ");
-			lcd_putstring(3,0, buffer);
-
-			STATS.CR_STS = OFF;
-			STATS.CR_ACT = OFF;
-			STATS.CRUISE_SPEED = 0;
+			// Button presses
+			if (SELECT){STATS.CRUISE_SPEED = 0;STATS.CR_STS = ON;}
+			else if (INCREMENT || DECREMENT){MENU.SUBMENU_POS++;}
 		}
 	}
-	else if (MENU.SUBMENU_POS == 1)
+	else // no cruise in reverse
 	{
-		sprintf(buffer, "-CRU TEST-");
-		_lcd_putTitle(buffer);
+		sprintf(buffer, " STS: OFF  ACT: OFF ");
+		lcd_putstring(1,0, buffer);
 
-		if (MENU.SELECTED || (CLOCK.T_S % 2))
-		{
-			switch (MENU.ITEM_SELECTOR)
-			{
-				default:
-					MENU.ITEM_SELECTOR = 0;
-					/* no break */
-				case 0:
-					sprintf(buffer, "THR:%04.0f << SPD:%5.1f ", CRUISE.SP, ESC.Velocity_KMH);
-					lcd_putstring(1,0, buffer);
+		sprintf(buffer, "  REVERSE ENGAGED!  ");
+		lcd_putstring(2,0, buffer);
 
-					sprintf(buffer, "SET                 ");
-					lcd_putstring(2,0, buffer);
+		sprintf(buffer, "                    ");
+		lcd_putstring(3,0, buffer);
 
-					sprintf(buffer, "RESET           EXIT");
-					lcd_putstring(3,0, buffer);
-					break;
-
-				case 1:
-					sprintf(buffer, "THR:%04.0f     SPD:%5.1f ", CRUISE.SP, ESC.Velocity_KMH);
-					lcd_putstring(1,0, buffer);
-
-					sprintf(buffer, "SET      <<         ");
-					lcd_putstring(2,0, buffer);
-
-					sprintf(buffer, "RESET           EXIT");
-					lcd_putstring(3,0, buffer);
-					break;
-
-				case 2:
-					sprintf(buffer, "THR:%04.0f     SPD:%5.1f ", CRUISE.SP, ESC.Velocity_KMH);
-					lcd_putstring(1,0, buffer);
-
-					sprintf(buffer, "SET                 ");
-					lcd_putstring(2,0, buffer);
-
-					sprintf(buffer, "RESET    <<     EXIT");
-					lcd_putstring(3,0, buffer);
-					break;
-
-				case 3:
-					sprintf(buffer, "THR:%04.0f    SPD:%5.1f ", CRUISE.SP, ESC.Velocity_KMH);
-					lcd_putstring(1,0, buffer);
-
-					sprintf(buffer, "SET                 ");
-					lcd_putstring(2,0, buffer);
-
-					sprintf(buffer, "RESET        >> EXIT");
-					lcd_putstring(3,0, buffer);
-					break;
-			}
-		}
-		else
-		{
-			sprintf(buffer, "THR:%04.0f    SPD:%5.1f ", CRUISE.SP, ESC.Velocity_KMH);
-			lcd_putstring(1,0, buffer);
-
-			sprintf(buffer, "SET                 ");
-			lcd_putstring(2,0, buffer);
-
-			sprintf(buffer, "RESET           EXIT");
-			lcd_putstring(3,0, buffer);
-		}
-
-		if (MENU.SELECTED) // Button checks
-		{
-			if (SELECT)
-			{
-				switch (MENU.ITEM_SELECTOR)
-				{
-					case 0:
-						// deselect menu
-						break;
-					case 1:
-						// set CO
-						CRUISE.CO = CRUISE.SP;
-						break;
-					case 2:
-						// reset SP
-						CRUISE.SP = CRUISE.CO;
-						break;
-					default:
-					case 3: // exit
-						CRUISE.SP = 0;
-						CRUISE.CO = 0;
-						MENU.SUBMENU_POS = 0;
-						MENU.ITEM_SELECTOR = 0;
-						break;
-				}
-				MENU.SELECTED = 0;
-			}
-			else if (INCREMENT)
-			{
-				switch (MENU.ITEM_SELECTOR)
-				{
-					case 0:
-						// inc SP
-						CRUISE.SP += 1;
-						break;
-					default:
-					case 1:
-					case 2:
-					case 3:
-						MENU.SELECTED = 0;
-						break;
-				}
-			}
-			else if (DECREMENT)
-			{
-				switch (MENU.ITEM_SELECTOR)
-				{
-					case 0:
-						// dec CO
-						CRUISE.SP -= 1;
-						break;
-					default:
-					case 1:
-					case 2:
-					case 3:
-						MENU.SELECTED = 0;
-						break;
-				}
-			}
-		}
-		else
-		{
-			if (SELECT)
-			{
-				MENU.ITEM_SELECTOR = 3;
-			}
-			else if (INCREMENT)
-			{
-				MENU.ITEM_SELECTOR++;
-				if(MENU.ITEM_SELECTOR > 3){MENU.ITEM_SELECTOR = 0;}
-			}
-			else if (DECREMENT)
-			{
-				MENU.ITEM_SELECTOR--;
-				if(MENU.ITEM_SELECTOR < 0){MENU.ITEM_SELECTOR = 3;}
-			}
-		}
-
+		STATS.CR_STS = OFF;
+		STATS.CR_ACT = OFF;
+		STATS.CRUISE_SPEED = 0;
 	}
 }
 
@@ -525,7 +348,7 @@ void lcd_display_MPPT1(void) // menus[5]
 		sprintf(buffer, "%2lu%cC", MPPT1.Tmp, 0xDF);
 		lcd_putstring(3,16, buffer);
 
-		if(CLOCK.T_mS > 0 && CLOCK.T_mS < 25)
+		if(CLOCK.T_mS > 0 && CLOCK.T_mS < 25) // TODO: Add precedence to error messages
 		{
 			if(MPPT1.BVLR)
 			{
@@ -636,7 +459,7 @@ void lcd_display_MPPT2(void) // menus[6]
 		sprintf(buffer, "%2lu%cC", MPPT2.Tmp, 0xDF);
 		lcd_putstring(3,16, buffer);
 
-		if(CLOCK.T_mS > 0 && CLOCK.T_mS < 25)
+		if(CLOCK.T_mS > 0 && CLOCK.T_mS < 25) // TODO: Add precedence to error messages
 		{
 			if(MPPT2.BVLR)
 			{
@@ -797,21 +620,22 @@ void lcd_display_motor (void) // menus[8]
 		sprintf(buffer, "%.1fAp @ %.1fWp ", ESC.MAX_Bus_I, ESC.MAX_Watts);
 		lcd_putstring(1,0, buffer);
 
-
-		sprintf(buffer, "                    ");
-		lcd_putstring(3,0, buffer);
 		if (SELECT)
 		{
-			ESC.MAX_Bus_I = ESC.MAX_Watts = 0;
+			ESC.MAX_Bus_I = 0;
 			ESC.MAX_Bus_V = 0;
+			ESC.MAX_Watts = 0;
 
 			buzzer(600);
 		}
 		break;
 	}
+	sprintf(buffer, "");
+	lcd_pustring(2,0, buffer);
+	lcd_pustring(3,0, buffer);
 
 	if(INCREMENT){MENU.SUBMENU_POS++;}
-	else if(DECREMENT){MENU.SUBMENU_POS--;}
+	else if(DECREMENT){MENU.SUBMENU_POS--; if(MENU.SUBMENU_POS < 0){MENU.SUBMENU_POS = 2;}}
 }
 
 
@@ -858,7 +682,7 @@ void lcd_display_debug (void) // menus[9]
 **
 ******************************************************************************/
 void lcd_display_errors (void) // menus[10]
-{ // TODO: Show all errors?
+{
 	char buffer[20];
 
 	sprintf(buffer, "-ESC FALT-");
@@ -889,13 +713,7 @@ void lcd_display_errors (void) // menus[10]
 		lcd_putstring(2,0, buffer);
 	}
 
-
-			//////////////////////////////////////////////////////////////
-			//////////////////   Fix for motor reset   ///////////////////
-			//////////////////////////////////////////////////////////////
-
-	// Don't reset on HWOC
-	if(SELECT && ((ESC1.ERROR & 0x1) || (ESC2.ERROR & 0x1)))	// MOTOR CONTROLLER ERROR RESET	GOES BELOW	--	NOT YET TESTED
+	if(SELECT && (ESC1.ERROR || ESC2.ERROR))	// MOTOR CONTROLLER ERROR RESET	GOES BELOW	--	NOT YET TESTED
 	{
 		sprintf(buffer, "RESET MOTOR CONTROLS");
 		lcd_putstring(0,0, buffer);
@@ -911,7 +729,7 @@ void lcd_display_errors (void) // menus[10]
 		if((LPC_CAN1->GSR & (1 << 3)))				// If previous transmission is complete, send message;
 		{
 			MsgBuf_TX1.Frame = 0x00080000; 			/* 11-bit, no RTR, DLC is 8 bytes */
-			MsgBuf_TX1.MsgID = 0x503; 		/* Explicit Standard ID */
+			MsgBuf_TX1.MsgID = 0x503; 				/* Explicit Standard ID */
 			MsgBuf_TX1.DataB = 0x0;
 			MsgBuf_TX1.DataA = 0x0;
 			CAN1_SendMessage( &MsgBuf_TX1 );
@@ -933,7 +751,6 @@ void lcd_display_errors (void) // menus[10]
 ******************************************************************************/
 void lcd_display_other (void) // menus[11]
 {
-	// TODO: Update DUTYBL here instead of drive routine
 	char buffer[20];
 
 	sprintf(buffer, "-OTHER-");
@@ -1132,13 +949,12 @@ void lcd_display_odometer (void) // menus[14]
 	sprintf(buffer, "CAR: %.5f KM   ", STATS.ODOMETER);
 	lcd_putstring(2,0, buffer);
 
-	sprintf(buffer, "ESC: %.5f KM   ", ESC.Odometer); //STATS.ODOMETER_REV);
+	sprintf(buffer, "ESC: %.5f KM   ", ESC.Odometer);
 	lcd_putstring(3,0, buffer);
 
 	if(SELECT && INCREMENT)
 	{
 		STATS.ODOMETER = 0;
-		//STATS.ODOMETER_REV = 0;
 		buzzer(300);
 	}
 }
@@ -1185,11 +1001,7 @@ void lcd_display_SWOC (void) // errors[0]
 			buzzer(20);
 		}
 	}
-	else if(INCREMENT || DECREMENT)
-	{
-		// mark error acknowledged
-		STATS.SWOC_ACK = TRUE;
-	}
+	else if(INCREMENT || DECREMENT){STATS.SWOC_ACK = TRUE;}// mark error acknowledged
 }
 
 /******************************************************************************
@@ -1238,7 +1050,7 @@ void lcd_display_HWOC (void) // errors[1]
 /******************************************************************************
 ** Function name:		_lcd_putTitle
 **
-** Description:			Used place the screen title and current car speed on
+** Description:			Used to place the screen title and current car speed on
 ** 						top line of LCD
 **
 ** Parameters:			1. Address of char array with title string (10 character max)
@@ -1304,5 +1116,5 @@ void menuInit (void)
 	MENU.menus[13] = lcd_display_runtime;
 	MENU.menus[14] = lcd_display_odometer;
 
-	MENU.MENU_POS = 1;
+	MENU.MENU_POS = 1; // Initial menu screen
 }

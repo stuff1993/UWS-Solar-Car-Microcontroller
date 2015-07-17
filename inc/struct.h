@@ -263,8 +263,8 @@ struct // BMU
 struct // STATS
 {
 	int RAMP_SPEED;
+	uint8_t IGNITION;
 	float ODOMETER;
-	//float ODOMETER_REV;
 	float MAX_SPEED;
 	float CRUISE_SPEED;
 	FLAG(DRIVE_MODE)

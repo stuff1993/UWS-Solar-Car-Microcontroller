@@ -226,8 +226,8 @@ void CAN_ISR_Rx1( void )
 #endif
 	break;
 	case BMU_BASE + BMU_INFO + 6:
-	BMU.Battery_V = MsgBuf_RX1.DataB;
-	BMU.Battery_I = iirFILTER(MsgBuf_RX1.DataA, BMU.Battery_I);
+	BMU.Battery_V = MsgBuf_RX1.DataB / 1000; // Packet is in mV and mA
+	BMU.Battery_I = iirFILTER(MsgBuf_RX1.DataA / 1000, BMU.Battery_I);
 	break;
 	case BMU_BASE + BMU_INFO + 7:
 	// Can extract 8 Status flags here but they are also contained with others in BASE + 9

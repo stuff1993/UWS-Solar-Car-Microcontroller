@@ -16,9 +16,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-// TODO: Check BMU ignition switch (CAN address 0x505)
-// TRI67.010v2_BMS_BMU_Communications_Protocol.pdf
-
 #include "inttofloat.h"
 #include "timer.h"
 #include "lcd.h"
@@ -74,9 +71,8 @@ MOTORCONTROLLER ESC;
 void BOD_IRQHandler (void)
 {
 	DUTYBL = 0;
-	LPC_PWM1->LER = LER6_EN;
 
-	REVERSE_ON;NEUTRAL_ON;REGEN_ON;DRIVE_ON;
+	REVERSE_ON;NEUTRAL_ON;REGEN_ON;DRIVE_ON;FAULT_ON;ECO_ON;SPORTS_ON;
 }
 
 /******************************************************************************
@@ -92,17 +88,31 @@ void SysTick_Handler (void)
 {
 	CLOCK.T_mS++;
 
-	if (CLOCK.T_mS % 10 == 0) // Every 100 mS
+	// MinorSec: DIU CAN Heartbeat
+	// TODO: Tx 0x500?
+	// TODO: Toggle indicator pins
+	if (CLOCK.T_mS % 10 == 0) // Every 100 mS send heartbeat CAN packets
 	{
-		// TODO: Transmit drive CAN packet + Ignition
 		MsgBuf_TX1.Frame = 0x00080000;
 		MsgBuf_TX1.MsgID = ESC_BASE + 1;
 		MsgBuf_TX1.DataA = conv_float_uint(DRIVE.Speed_RPM);
 		MsgBuf_TX1.DataB = conv_float_uint(DRIVE.Current);
 		CAN1_SendMessage( &MsgBuf_TX1 );
+
+		MsgBuf_TX1.Frame = 0x00080000;
+		MsgBuf_TX1.MsgID = ESC_BASE + 2;
+		MsgBuf_TX1.DataA = conv_float_uint(1);
+		MsgBuf_TX1.DataB = 0x0;
+		CAN1_SendMessage( &MsgBuf_TX1 );
+
+		MsgBuf_TX1.Frame = 0x00080000;
+		MsgBuf_TX1.MsgID = ESC_BASE + 5;
+		MsgBuf_TX1.DataA = STATS.IGNITION;
+		MsgBuf_TX1.DataB = 0x0;
+		CAN1_SendMessage( &MsgBuf_TX1 );
 	}
 
-	////////////////////////  AMP/hr and WATT/hr Calculations  ///////////////////////
+	// MinorSec:  Time sensitive Calculations
 	ESC.WattHrs += (ESC.Watts/360000);
 
 	MPPT1.WattHrs += (MPPT1.Watts/360000);
@@ -110,10 +120,8 @@ void SysTick_Handler (void)
 
 	BMU.WattHrs += (BMU.Watts/360000);
 
-	////////////////////////  Odometer Calculations  ///////////////////////
 	STATS.ODOMETER += ESC.Velocity_KMH/360000;
-	//if(ESC.Velocity_KMH<0){STATS.ODOMETER_REV = STATS.ODOMETER_REV + ESC.Velocity_KMH/360000;}
-	//////////////////////////////////////////////////////////////////////////////////
+
 
 	if(CLOCK.T_mS >= 100) // Calculate time
 	{
@@ -145,6 +153,7 @@ void menu_mppt_poll (void)
 {
 	STATS.MPPT_POLL_COUNT ^= 0b1; 								// Toggle bit. Selects which MPPT to poll this round
 
+	// Send request to MPPT
 	if((LPC_CAN2->GSR & (1 << 3)) && STATS.MPPT_POLL_COUNT)		// If previous transmission is complete, send message;
 	{
 		MsgBuf_TX2.MsgID = MPPT2_BASE_ID; 						// Explicit Standard ID
@@ -157,11 +166,11 @@ void menu_mppt_poll (void)
 		CAN2_SendMessage( &MsgBuf_TX2 );
 	}
 
-
+	// Push previous data to car
 	if((LPC_CAN1->GSR & (1 << 3)) && STATS.MPPT_POLL_COUNT)		// If previous transmission is complete, send message;
 	{
-		MsgBuf_TX1.Frame = 0x00080000; 							// 11-bit, no RTR, DLC is 8 bytes
-		MsgBuf_TX1.MsgID = DASH_RPLY_2; 						// Explicit Standard ID
+		MsgBuf_TX1.Frame = 0x00070000; 							// 11-bit, no RTR, DLC is 8 bytes
+		MsgBuf_TX1.MsgID = MPPT2_BASE + MPPT_RPLY; 						// Explicit Standard ID
 		if (MPPT2.Connected) // Relay data
 		{
 			MsgBuf_TX1.DataA = fakeMPPT2.DataA;
@@ -176,8 +185,8 @@ void menu_mppt_poll (void)
 	}
 	else if(LPC_CAN1->GSR & (1 << 3))							// If previous transmission is complete, send message;
 	{
-		MsgBuf_TX1.Frame = 0x00080000; 							// 11-bit, no RTR, DLC is 8 bytes
-		MsgBuf_TX1.MsgID = DASH_RPLY_1; 						// Explicit Standard ID
+		MsgBuf_TX1.Frame = 0x00070000; 							// 11-bit, no RTR, DLC is 8 bytes
+		MsgBuf_TX1.MsgID = MPPT1_BASE + MPPT_RPLY; 						// Explicit Standard ID
 		if (MPPT1.Connected) // Relay data
 		{
 			MsgBuf_TX1.DataA = fakeMPPT1.DataA;
@@ -191,14 +200,12 @@ void menu_mppt_poll (void)
 		CAN1_SendMessage( &MsgBuf_TX1 );
 	}
 
-
-	/* please note: FULLCAN identifier will NOT be received as it's not set
-		in the acceptance filter. */
+	// Receive new MPPT data
 	if ( CAN2RxDone == TRUE )
 	{
 		CAN2RxDone = FALSE;
-		if		(MsgBuf_RX2.MsgID == MPPT1_REPLY){mppt_data_extract(&MPPT1, &fakeMPPT1);}
-		else if	(MsgBuf_RX2.MsgID == MPPT2_REPLY){mppt_data_extract(&MPPT2, &fakeMPPT2);}
+		if		(MsgBuf_RX2.MsgID == MPPT1_BASE + MPPT_RPLY){mppt_data_extract(&MPPT1, &fakeMPPT1);}
+		else if	(MsgBuf_RX2.MsgID == MPPT2_BASE + MPPT_RPLY){mppt_data_extract(&MPPT2, &fakeMPPT2);}
 
 		// Everything is correct, reset buffer
 		MsgBuf_RX2.Frame = 0x0;
@@ -269,6 +276,7 @@ void mppt_data_extract (MPPT *_MPPT, fakeMPPTFRAME *_fkMPPT)
 ******************************************************************************/
 void menu_input_check (void)
 {
+	// TODO: Handle indicators status here
 	unsigned char OLD_IO = SWITCH_IO;
 
 	SWITCH_IO = 0;
@@ -309,6 +317,8 @@ void menu_input_check (void)
 	// Check Sports/Economy switch
 	if(SWITCH_IO & 0x4)	{STATS.DRIVE_MODE = SPORTS;STATS.RAMP_SPEED = SPORTS_RAMP_SPEED;}
 	else				{STATS.DRIVE_MODE = ECONOMY;STATS.RAMP_SPEED = ECONOMY_RAMP_SPEED;}
+
+	// TODO: Fault check for FAULT LED
 }
 
 /******************************************************************************
@@ -326,7 +336,7 @@ void menu_drive (void)
 	uint32_t ADC_B;
 
 	////////////// THROTTLE ////////////////
-	if(!CRUISE.ACTIVE)
+	if(!STATS.CR_ACT)
 	{
 		ADC_A = (ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0))/8;
 
@@ -346,49 +356,34 @@ void menu_drive (void)
 	if(RGN_POS > 1000){RGN_POS = 1000;}
 	if(RGN_POS){STATS.CR_ACT = OFF;}
 
-	////////////// DRIVE LOGIC ////////////////
+	// MinorSec: DRIVE LOGIC
 	if (!MECH_BRAKE && (FORWARD || REVERSE)){
-		if(!STATS.CR_ACT && FORWARD && !RGN_POS && ((DRIVE.Current * 1000) < THR_POS))		{DRIVE.Speed_RPM = 30000; DRIVE.Current += (STATS.RAMP_SPEED / 1000.0);}
-		else if(!STATS.CR_ACT && FORWARD && !RGN_POS)										{DRIVE.Speed_RPM = 30000; DRIVE.Current = (THR_POS / 1000.0);}
-		else if(!STATS.CR_ACT && REVERSE && !RGN_POS && ((DRIVE.Current * 1000) < THR_POS))	{DRIVE.Speed_RPM = -30000; DRIVE.Current += (STATS.RAMP_SPEED / 1000.0);}
-		else if(!STATS.CR_ACT && REVERSE && !RGN_POS)										{DRIVE.Speed_RPM = -30000; DRIVE.Current = (THR_POS / 1000.0);}
-		else if(!STATS.CR_ACT && RGN_POS && ((DRIVE.Current * 1000) < RGN_POS))				{DRIVE.Speed_RPM = 0; DRIVE.Current += (REGEN_RAMP_SPEED / 1000.0);}
-		else if(!STATS.CR_ACT && RGN_POS)													{DRIVE.Speed_RPM = 0; DRIVE.Current = (RGN_POS / 2);}
-		else if(STATS.CR_ACT){DRIVE.Current = 1.0; DRIVE.Speed_RPM = STATS.CRUISE_SPEED / ((60 * 3.14 * WH_RADIUS_M) / 1000.0);}
+		if(STATS.CR_ACT){DRIVE.Current = 1.0; DRIVE.Speed_RPM = STATS.CRUISE_SPEED / ((60 * 3.14 * WH_RADIUS_M) / 1000.0);}
+		else if(!THR_POS && !RGN_POS){DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}
+		else if(FORWARD && ESC.Velocity_KMH > -5.0 && !RGN_POS && ((DRIVE.Current * 1000) < THR_POS))	{DRIVE.Speed_RPM = 1500; 	DRIVE.Current += (STATS.RAMP_SPEED / 1000.0);}
+		else if(FORWARD && ESC.Velocity_KMH > -5.0 && !RGN_POS)										{DRIVE.Speed_RPM = 1500; 	DRIVE.Current = (THR_POS / 1000.0);}
+		else if(REVERSE && ESC.Velocity_KMH < 1.0 && !RGN_POS && ((DRIVE.Current * 1000) < THR_POS))	{DRIVE.Speed_RPM = -200; 	DRIVE.Current += (STATS.RAMP_SPEED / 1000.0);}
+		else if(REVERSE && ESC.Velocity_KMH < 1.0 && !RGN_POS)										{DRIVE.Speed_RPM = -200; 	DRIVE.Current = (THR_POS / 1000.0);}
+		else if(RGN_POS && ((DRIVE.Current * 1000) < RGN_POS))				{DRIVE.Speed_RPM = 0; 		DRIVE.Current += (REGEN_RAMP_SPEED / 1000.0);}
+		else if(RGN_POS)													{DRIVE.Speed_RPM = 0; 		DRIVE.Current = (RGN_POS / 2);}
 		else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}}
-	else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}
+	else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;} // TODO: electronic park brake?? RPM = 0, current = 1
 
-	////////////// LIGHTS ////////////////
+	// MinorSec: LIGHTS
 	if(MECH_BRAKE || RGN_POS){BRAKELIGHT_ON;}
 	else{BRAKELIGHT_OFF;}
 
 	if(!RGN_POS)
 	{
-		if(REVERSE)
-		{REVERSE_ON;NEUTRAL_OFF;REGEN_OFF;DRIVE_OFF;}
-
-		else if(FORWARD)
-		{REVERSE_OFF;NEUTRAL_OFF;REGEN_OFF;DRIVE_ON;}
-
-		else
-		{REVERSE_OFF;NEUTRAL_ON;REGEN_OFF;DRIVE_OFF;}
+		if(REVERSE){REVERSE_ON;NEUTRAL_OFF;REGEN_OFF;DRIVE_OFF;STATS.IGNITION = 0x21;}
+		else if(FORWARD){REVERSE_OFF;NEUTRAL_OFF;REGEN_OFF;DRIVE_ON;STATS.IGNITION = 0x28;}
+		else{REVERSE_OFF;NEUTRAL_ON;REGEN_OFF;DRIVE_OFF;STATS.IGNITION = 0x22;}
 	}
 	else
 	{
-		if(REVERSE)
-		{REVERSE_ON;NEUTRAL_OFF;REGEN_ON;DRIVE_OFF;}
-
-		else if(FORWARD)
-		{REVERSE_OFF;NEUTRAL_OFF;REGEN_ON;DRIVE_ON;}
-
-		else
-		{REVERSE_OFF;NEUTRAL_ON;REGEN_OFF;DRIVE_OFF;}
-	}
-
-	// TODO: Move to CAN Rx
-	if(ESC.Velocity_KMH > STATS.MAX_SPEED)
-	{
-		STATS.MAX_SPEED = ESC.Velocity_KMH;
+		if(REVERSE){REVERSE_ON;NEUTRAL_OFF;REGEN_ON;DRIVE_OFF;STATS.IGNITION = 0x25;}
+		else if(FORWARD){REVERSE_OFF;NEUTRAL_OFF;REGEN_ON;DRIVE_ON;STATS.IGNITION = 0x2C;}
+		else{REVERSE_OFF;NEUTRAL_ON;REGEN_OFF;DRIVE_OFF;STATS.IGNITION = 0x22;}
 	}
 }
 
@@ -530,6 +525,7 @@ void menu_calc (void)
 	if(ESC.Watts > ESC.MAX_Watts){ESC.MAX_Watts = ESC.Watts;}
 	if(ESC.Bus_I > ESC.MAX_Bus_I){ESC.MAX_Bus_I = ESC.Bus_I;}
 	if(ESC.Bus_V > ESC.MAX_Bus_V){ESC.MAX_Bus_V = ESC.Bus_V;}
+	if(ESC.Velocity_KMH > STATS.MAX_SPEED){STATS.MAX_SPEED = ESC.Velocity_KMH;}
 
 	if(MPPT1.Tmp > MPPT1.MAX_Tmp){MPPT1.MAX_Tmp = MPPT1.Tmp;}
 	if(MPPT1.VIn > MPPT1.MAX_VIn){MPPT1.MAX_VIn = MPPT1.VIn;}
@@ -746,7 +742,7 @@ void init_GPIO (void)
 	 * 	PINSEL2:
 	 * 		0 - IN - RIGHT_ON
 	 * 		1 - IN - LEFT_ON
-	 * 		4 - OUT - Power LED
+	 * 		4 - IN - Power Status
 	 * 		8 - IN - Armed Status
 	 * 	PINSEL3:
 	 * 		19 - OUT - Blinker R
@@ -762,8 +758,8 @@ void init_GPIO (void)
 	 * 		30 - OUT - ECO LED
 	 * 		31 - OUT - SPORTS LED
 	 */
-	LPC_GPIO1->FIODIR = (1<<4)|(1<<19)|(1<<20)|(1<<21)|(1<<23)|(1<<24)|(1<<25)|(1<<26)|(1<<30)|(1<<31);
-	LPC_GPIO1->FIOCLR = (1<<4)|(1<<19)|(1<<20)|(1<<21)|(1<<23)|(1<<24)|(1<<25)|(1<<26)|(1<<30)|(1<<31);
+	LPC_GPIO1->FIODIR = (1<<19)|(1<<20)|(1<<21)|(1<<23)|(1<<24)|(1<<25)|(1<<26)|(1<<30)|(1<<31);
+	LPC_GPIO1->FIOCLR = (1<<19)|(1<<20)|(1<<21)|(1<<23)|(1<<24)|(1<<25)|(1<<26)|(1<<30)|(1<<31);
 
 	/*
 	 * GPIO2:
@@ -890,7 +886,7 @@ int main (void)
 			if(STATS.HWOC_ACK && !(ESC.ERROR & 0x1)) // if acknowledged previous error is reset
 			{STATS.HWOC_ACK = FALSE;}
 
-			MENU.menus[MENU_POS]();
+			MENU.menus[MENU.MENU_POS]();
 		}
 
 		menu_mppt_poll();

@@ -30,7 +30,7 @@ typedef enum {DISABLE = 0, ENABLE = !DISABLE} FunctionalState;
 
 // TODO: Get actual radius
 // Reqs: Measure car
-#define WH_RADIUS_M (1)
+#define WH_RADIUS_M (0.52) // metres
 
 /// OUTPUTS
 #define BUZZER_ON		LPC_GPIO0->FIOSET = (1<<3);
@@ -38,9 +38,6 @@ typedef enum {DISABLE = 0, ENABLE = !DISABLE} FunctionalState;
 
 #define FAULT_ON		LPC_GPIO0->FIOSET = (1<<27);
 #define FAULT_OFF		LPC_GPIO0->FIOCLR = (1<<27);
-
-#define POWER_ON		LPC_GPIO1->FIOSET = (1<<4);
-#define POWER_OFF		LPC_GPIO1->FIOCLR = (1<<4);
 
 #define BLINKER_R_ON	LPC_GPIO1->FIOSET = (1<<19);LPC_GPIO3->FIOSET = (1<<26);
 #define BLINKER_R_OFF	LPC_GPIO1->FIOCLR = (1<<19);LPC_GPIO3->FIOCLR = (1<<26);
@@ -120,6 +117,16 @@ typedef enum {DISABLE = 0, ENABLE = !DISABLE} FunctionalState;
 #define AddressMPPT1WHR	12
 #define AddressBMUWHR	16
 #define AddressMPPT2WHR	20
+
+// BMU Ignition switches
+
+#define SW_MODE_R		0x0001
+#define SW_MODE_N		0x0002
+#define SW_MODE_B		0x0004
+#define SW_MODE_D		0x0008
+#define SW_IGN_ACC		0x0010
+#define SW_IGN_ON		0x0020
+#define SW_IGN_START	0x0040
 
 
 void BOD_IRQHandler(void);
