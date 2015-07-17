@@ -90,7 +90,6 @@ void SysTick_Handler (void)
 
 	// MinorSec: DIU CAN Heartbeat
 	// TODO: Tx 0x500?
-	// TODO: Toggle indicator pins
 	if (CLOCK.T_mS % 10 == 0) // Every 100 mS send heartbeat CAN packets
 	{
 		MsgBuf_TX1.Frame = 0x00080000;
@@ -213,6 +212,31 @@ void menu_mppt_poll (void)
 		MsgBuf_RX2.DataA = 0x0;
 		MsgBuf_RX2.DataB = 0x0;
 	} // Message on CAN 2 received
+
+	// Check mppt connection timeout
+	if(!MPPT1.Connected)
+	{
+		// Reset Power Variables if not connected
+		MPPT1.VIn = 0;
+		MPPT1.IIn = 0;
+		MPPT1.VOut = 0;
+		MPPT1.Watts = 0;
+
+		fakeMPPT1.DataA = 0;
+		fakeMPPT1.DataB = 0;
+	}
+
+	if(!MPPT2.Connected)
+	{
+		// Reset Power Variables if not connected
+		MPPT2.VIn = 0;
+		MPPT2.IIn = 0;
+		MPPT2.VOut = 0;
+		MPPT2.Watts = 0;
+
+		fakeMPPT2.DataA = 0;
+		fakeMPPT2.DataB = 0;
+	}
 }
 
 /******************************************************************************
@@ -276,13 +300,14 @@ void mppt_data_extract (MPPT *_MPPT, fakeMPPTFRAME *_fkMPPT)
 ******************************************************************************/
 void menu_input_check (void)
 {
-	// TODO: Handle indicators status here
 	unsigned char OLD_IO = SWITCH_IO;
 
 	SWITCH_IO = 0;
 	SWITCH_IO |= (FORWARD << 0);
 	SWITCH_IO |= (REVERSE << 1);
 	SWITCH_IO |= (SPORT_MODE << 2);
+	SWITCH_IO |= (LEFT_ON << 3);
+	SWITCH_IO |= (RIGHT_ON << 4);
 
 	if(OLD_IO != SWITCH_IO){buzzer(50);}	// BEEP if toggle position has changed.
 
@@ -293,6 +318,18 @@ void menu_input_check (void)
 		if(MENU.MENU_POS==1){buzzer(300);}
 		if((ESC.ERROR & 0x2) && !STATS.SWOC_ACK){STATS.SWOC_ACK = TRUE;}
 		if((ESC.ERROR & 0x1) && !STATS.HWOC_ACK){STATS.HWOC_ACK = TRUE;BUZZER_OFF}
+		if(STATS.COMMS == 1)
+		{
+			if((LPC_CAN1->GSR & (1 << 3)))				// If previous transmission is complete, send message;
+			{
+				MsgBuf_TX1.Frame = 0x00010000; 			/* 11-bit, no RTR, DLC is 1 byte */
+				MsgBuf_TX1.MsgID = DASH_RPLY + 1; 		/* Explicit Standard ID */
+				MsgBuf_TX1.DataA = 0x0;
+				MsgBuf_TX1.DataB = 0x0;
+				CAN1_SendMessage( &MsgBuf_TX1 );
+			}
+			STATS.COMMS = 0;
+		}
 
 		lcd_clear();
 		MENU.SELECTED = 0;
@@ -307,6 +344,18 @@ void menu_input_check (void)
 		if(MENU.MENU_POS==1){buzzer(300);}
 		if((ESC.ERROR & 0x2) && !STATS.SWOC_ACK){STATS.SWOC_ACK = TRUE;}
 		if((ESC.ERROR & 0x1) && !STATS.HWOC_ACK){STATS.HWOC_ACK = TRUE;BUZZER_OFF}
+		if(STATS.COMMS == 1)
+		{
+			if((LPC_CAN1->GSR & (1 << 3)))				// If previous transmission is complete, send message;
+			{
+				MsgBuf_TX1.Frame = 0x00010000; 			/* 11-bit, no RTR, DLC is 1 byte */
+				MsgBuf_TX1.MsgID = DASH_RPLY + 1; 		/* Explicit Standard ID */
+				MsgBuf_TX1.DataA = 0x0;
+				MsgBuf_TX1.DataB = 0x0;
+				CAN1_SendMessage( &MsgBuf_TX1 );
+			}
+			STATS.COMMS = 0;
+		}
 
 		lcd_clear();
 		MENU.SELECTED = 0;
@@ -317,8 +366,20 @@ void menu_input_check (void)
 	// Check Sports/Economy switch
 	if(SWITCH_IO & 0x4)	{STATS.DRIVE_MODE = SPORTS;STATS.RAMP_SPEED = SPORTS_RAMP_SPEED;}
 	else				{STATS.DRIVE_MODE = ECONOMY;STATS.RAMP_SPEED = ECONOMY_RAMP_SPEED;}
+}
 
-	// TODO: Fault check for FAULT LED
+/******************************************************************************
+** Function name:		menu_fault_check
+**
+** Description:			Checks for faults in car components
+**
+** Parameters:			None
+** Returned value:		Fault status
+**
+******************************************************************************/
+int menu_fault_check (void)
+{
+	// TODO: menu_fault_check
 }
 
 /******************************************************************************
@@ -368,8 +429,19 @@ void menu_drive (void)
 		else if(RGN_POS)													{DRIVE.Speed_RPM = 0; 		DRIVE.Current = (RGN_POS / 2);}
 		else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}}
 	else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;} // TODO: electronic park brake?? RPM = 0, current = 1
+}
 
-	// MinorSec: LIGHTS
+/******************************************************************************
+** Function name:		menu_lights
+**
+** Description:			Controls status of lights and LEDs
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void menu_lights (void)
+{
 	if(MECH_BRAKE || RGN_POS){BRAKELIGHT_ON;}
 	else{BRAKELIGHT_OFF;}
 
@@ -385,42 +457,17 @@ void menu_drive (void)
 		else if(FORWARD){REVERSE_OFF;NEUTRAL_OFF;REGEN_ON;DRIVE_ON;STATS.IGNITION = 0x2C;}
 		else{REVERSE_OFF;NEUTRAL_ON;REGEN_OFF;DRIVE_OFF;STATS.IGNITION = 0x22;}
 	}
-}
 
-/******************************************************************************
-** Function name:		menu_mppt_comm_check
-**
-** Description:			Resets MPPTs on disconnect
-**
-** Parameters:			None
-** Returned value:		None
-**
-******************************************************************************/
-void menu_mppt_comm_check (void)
-{
-	if(!MPPT1.Connected)
-	{
-		// Reset Power Variables if not connected
-		MPPT1.VIn = 0;
-		MPPT1.IIn = 0;
-		MPPT1.VOut = 0;
-		MPPT1.Watts = 0;
+	if ((SWITCH_IO & 0x8) && (CLOCK.T_mS > 25 && CLOCK.T_mS < 75)){BLINKER_L_ON}
+	else {BLINKER_L_OFF}
+	if ((SWITCH_IO & 0x10) && (CLOCK.T_mS > 25 && CLOCK.T_mS < 75)){BLINKER_R_ON}
+	else {BLINKER_R_OFF}
 
-		fakeMPPT1.DataA = 0;
-		fakeMPPT1.DataB = 0;
-	}
+	if(SWITCH_IO & 0x4)	{SPORTS_ON;ECO_OFF}
+	else				{SPORTS_OFF;ECO_ON}
 
-	if(!MPPT2.Connected)
-	{
-		// Reset Power Variables if not connected
-		MPPT2.VIn = 0;
-		MPPT2.IIn = 0;
-		MPPT2.VOut = 0;
-		MPPT2.Watts = 0;
-
-		fakeMPPT2.DataA = 0;
-		fakeMPPT2.DataB = 0;
-	}
+	if(STATS.FAULT){FAULT_ON}
+	else{FAULT_OFF}
 }
 
 /******************************************************************************
@@ -443,8 +490,6 @@ void tx500CAN (void) // TODO: Rewrite
 	 *
 	 * Old power packets should be redundant if telemetry reads every CAN packet
 	 */
-	/* please note: FULLCAN identifier will NOT be received as it's not set
-	in the acceptance filter. */
 	if ( CAN1RxDone == TRUE )
 	{
 		CAN1RxDone = FALSE;
@@ -468,6 +513,10 @@ void tx500CAN (void) // TODO: Rewrite
 
 			lcd_clear();
 		}
+		else if (MsgBuf_RX1.MsgID == DASH_RQST)
+		{
+			STATS.COMMS = 1;
+		}
 
 		////////////////////////////////////////////////////////////////////////////////////
 		// TODO: Remove + talk to matt about custom packet comms
@@ -475,24 +524,6 @@ void tx500CAN (void) // TODO: Rewrite
 		// RPLY2 - COMMS CHECK RESULT
 		// RPLY3 - ACK PULL OVER REQ
 		// RPLY4 - component tmps?
-		if((LPC_CAN1->GSR & (1 << 3))  && !STATS.MPPT_POLL_COUNT)		// If previous transmission is complete, send message;
-		{
-			MsgBuf_TX1.Frame = 0x00080000; 							/* 11-bit, no RTR, DLC is 8 bytes */
-			MsgBuf_TX1.MsgID = DASH_RPLY_3; 						/* Explicit Standard ID */
-			MsgBuf_TX1.DataA = conv_float_uint(MPPT1.WattHrs + MPPT2.WattHrs);		// MPPT WHR TOTAL
-			MsgBuf_TX1.DataB = conv_float_uint(BMU.WattHrs);		// BMU WHR TOTAL
-			CAN1_SendMessage( &MsgBuf_TX1 );
-		}
-
-		else if((LPC_CAN1->GSR & (1 << 3)))							// If previous transmission is complete, send message;
-		{
-			MsgBuf_TX1.Frame = 0x00080000; 							/* 11-bit, no RTR, DLC is 8 bytes */
-			MsgBuf_TX1.MsgID = DASH_RPLY_4; 						/* Explicit Standard ID */
-			MsgBuf_TX1.DataA = conv_float_uint(MPPT1.Watts + MPPT2.Watts);	// MPPT CURRENT WATTS
-			MsgBuf_TX1.DataB = conv_float_uint(BMU.Watts);					// BMU CURRENT WATTS
-			CAN1_SendMessage( &MsgBuf_TX1 );
-		}
-
 
 		// Clear Rx Buffer
 		MsgBuf_RX1.Frame = 0x0;
@@ -862,7 +893,7 @@ int main (void)
 	while (FORWARD || REVERSE)
 	{
 		lcd_display_errOnStart();
-		DUTYBL = 1000;
+		DUTYBL = 1000; // TODO: No backlight on OLED
 		buzzer(700);
 
 		lcdClear();
@@ -872,13 +903,11 @@ int main (void)
 
 	while(1) { // Exiting this loop ends the program
 		if((ESC.ERROR & 0x2) && !STATS.SWOC_ACK) // on unacknowledged SWOC error, show error screen
-		{
-			MENU.errors[0]();
-		}
+		{MENU.errors[0]();}
 		else if ((ESC.ERROR & 0x1) && !STATS.HWOC_ACK) // on unacknowledged SWOC error, show error screen
-		{
-			MENU.errors[1]();
-		}
+		{MENU.errors[1]();}
+		else if (STATS.COMMS)
+		{MENU.errors[2]();}
 		else
 		{
 			if(STATS.SWOC_ACK && !(ESC.ERROR & 0x2)) // if acknowledged previous error is reset
@@ -892,7 +921,7 @@ int main (void)
 		menu_mppt_poll();
 		menu_input_check();
 		menu_drive();
-		menu_mppt_comm_check();
+		menu_lights();
 		tx500CAN();
 		menu_calc();
     }

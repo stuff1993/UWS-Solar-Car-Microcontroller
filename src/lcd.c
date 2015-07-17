@@ -112,17 +112,19 @@ void setLCD( void )
 {
 	delayMs(1,50);
 
-	lcd_command_write(0b00000010);     /*   cursor home                                 */
+	lcd_command_write(0b00101001);	/*   function set - 4-bit interface    */
 	delayMs(1,2);
-	lcd_command_write(0b00000110);     /*   cursor move direction                       */
+	lcd_command_write(0b00001000);	/*   display off    */
 	delayMs(1,2);
-	lcd_command_write(0b00001100) ;    /*   display on      */
+	lcd_clear();
+	lcd_command_write(0b00000110);	/*   cursor move direction    */
 	delayMs(1,2);
-	lcd_command_write(0b00101000);     /*   4-bit interface, two line, 5X7 dots.        */
+	lcd_command_write(0b00000010);	/*   cursor home    */
+	delayMs(1,2);
+	lcd_command_write(0b00001100);	/*   display on      */
 	delayMs(1,2);
 
 	lcd_gotoxy(0, 0);
 	delayMs(1,2);
 	lcd_clear();
-	delayMs(1,2);
 }

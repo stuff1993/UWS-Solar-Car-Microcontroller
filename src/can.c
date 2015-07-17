@@ -264,11 +264,9 @@ void CAN_ISR_Rx1( void )
 #endif
 	break;
 
-
 	default:
 		break;
 	}
-
 
 	CAN1RxDone = TRUE;
 	LPC_CAN1->CMR = 0x4; // Release Receive Buffer

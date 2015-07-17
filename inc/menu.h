@@ -9,7 +9,7 @@
 #define MENU_H_
 
 #define	MENU_ITEMS 15
-#define ERROR_ITEMS 2
+#define ERROR_ITEMS 3
 
 void lcd_display_errOnStart(void);
 void lcd_display_intro(void);
@@ -32,6 +32,7 @@ void lcd_display_odometer(void);
 
 void lcd_display_SWOC(void);
 void lcd_display_HWOC(void);
+void lcd_display_COMMS(void);
 
 void _lcd_putTitle(char*);
 
