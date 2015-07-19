@@ -8,8 +8,9 @@
 #ifndef STRUCT_H_
 #define STRUCT_H_
 
-#include "dash.h"
-
+#ifndef FLAG
+#define FLAG(x) unsigned int x :1;
+#endif // FLAG(x)
 
 /// MPPT
 #define _MPPT_FLAGS 1
@@ -273,9 +274,9 @@ struct // STATS
 	FLAG(SWOC_ACK)
 	FLAG(HWOC_ACK)
 	FLAG(COMMS)
-	FLAG(FAULT)
 	FLAG(CR_ACT)
 	FLAG(CR_STS)
+	unsigned int FAULT :2;
 }STATS;
 
 struct // DRIVE
@@ -284,15 +285,7 @@ struct // DRIVE
 	float Current;
 }DRIVE;
 
-struct MENUS
-{
-	void (*menus[MENU_ITEMS]) (void);
-	void (*errors[ERROR_ITEMS]) (void);
-	uint8_t MENU_POS;
-	uint8_t SUBMENU_POS;
-	uint8_t ITEM_SELECTOR;
-	FLAG(SELECTED)
-}MENU;
+
 
 struct CLOCK_STRUCT
 {

@@ -2,7 +2,7 @@
  *  pwm.c
 ****************************************************************************/
 #include "lpc17xx.h"
-//#include "type.h"
+#include "type.h"
 #include "pwm.h"
 
 volatile uint32_t match_counter0, match_counter1;

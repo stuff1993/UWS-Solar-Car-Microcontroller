@@ -8,14 +8,18 @@
  *  lcd_display_<menu>
  */
 
+#include "lpc17xx.h"
+
 #include <stdio.h>
 #include <stdint.h>
+#include "type.h"
+#include "can.h"
+#include "timer.h"
+#include "lcd.h"
 #include "menu.h"
 #include "dash.h"
 
-#include "lpc17xx.h"
-
-extern MOTORCONTROLLER ESC1, ESC2;
+extern MOTORCONTROLLER ESC;
 extern MPPT MPPT1, MPPT2;
 extern CAN_MSG MsgBuf_TX1;
 extern uint16_t PWMBL;
@@ -154,14 +158,14 @@ void lcd_display_home (void) // menus[2]
 
 	// TODO: Unlikely to get throttle % from controller, can get absolute current.
 	// May be able to hard code current cap for controller and divide for %
-	if(STATS.CR_ACT)
+	/*if(STATS.CR_ACT)
 	{
 		if (CRUISE.CO >= 1000){sprintf(buffer, "CRUISE FW: %3d.%d%%   ", PWMA/10,PWMA%10);}
 		else{sprintf(buffer, "CRUISE RG: %3d.%d%%   ", PWMC/10,PWMC%10);}
 
 		lcd_putstring(2,0, buffer);
 	}
-	else if(FORWARD && !RGN_POS){
+	else */if(FORWARD && !RGN_POS){
 		sprintf(buffer, "DRIVE:     %3d.%d%%   ", THR_POS/10,THR_POS%10);
 		lcd_putstring(2,0, buffer);}
 
@@ -505,12 +509,15 @@ void lcd_display_motor (void) // menus[8]
 		lcd_putstring(1,0, buffer);
 
 		break;
-	case 2: // TODO: Display peak V?
+	case 2:
 		sprintf(buffer, "-MTR PKS-");
 		_lcd_putTitle(buffer);
 
 		sprintf(buffer, "%.1fAp @ %.1fWp ", ESC.MAX_Bus_I, ESC.MAX_Watts);
 		lcd_putstring(1,0, buffer);
+
+		sprintf(buffer, "%.1fVp");
+		lcd_putstring(2,0, buffer);
 
 		if (SELECT)
 		{
@@ -523,8 +530,7 @@ void lcd_display_motor (void) // menus[8]
 		break;
 	}
 	sprintf(buffer, "");
-	lcd_pustring(2,0, buffer);
-	lcd_pustring(3,0, buffer);
+	lcd_putstring(3,0, buffer);
 
 	if(INCREMENT){MENU.SUBMENU_POS++;}
 	else if(DECREMENT){MENU.SUBMENU_POS--; if(MENU.SUBMENU_POS < 0){MENU.SUBMENU_POS = 2;}}
@@ -581,31 +587,21 @@ void lcd_display_errors (void) // menus[10]
 	_lcd_putTitle(buffer);
 
 	// If no ERRORS then display MPPT Watts
-	if(ESC1.ERROR && ESC2.ERROR)
+	if(ESC.ERROR)
 	{
-		sprintf(buffer, "ESC1 & ESC2 FAULTS  ");
+		sprintf(buffer, "ESC FAULT  ");
 		lcd_putstring(2,0, buffer);
 
 		sprintf(buffer, "CODE: %d ", ESC.ERROR);
 		lcd_putstring(3,0, buffer);
 	}
-
-	else if(ESC.ERROR)
-	{
-		sprintf(buffer, "ESC FAULT          ");
-		lcd_putstring(2,0, buffer);
-
-		sprintf(buffer, "CODE: %d", ESC1.ERROR);
-		lcd_putstring(3,0, buffer);
-	}
-
 	else
 	{
 		sprintf(buffer, "NO FAULTS           ");
 		lcd_putstring(2,0, buffer);
 	}
 
-	if(SELECT && (ESC1.ERROR || ESC2.ERROR))	// MOTOR CONTROLLER ERROR RESET	GOES BELOW	--	NOT YET TESTED
+	if(SELECT && ESC.ERROR)	// MOTOR CONTROLLER ERROR RESET	GOES BELOW	--	NOT YET TESTED
 	{
 		sprintf(buffer, "RESET MOTOR CONTROLS");
 		lcd_putstring(0,0, buffer);
@@ -941,7 +937,7 @@ void lcd_display_HWOC (void) // errors[1]
 /******************************************************************************
 ** Function name:		lcd_display_COMMS
 **
-** Description:			Display screen for HWOC error
+** Description:			Display screen for COMMs check
 **
 ** Parameters:			None
 ** Returned value:		None
@@ -972,7 +968,7 @@ void lcd_display_COMMS (void)
 				MsgBuf_TX1.DataB = 0x0;
 				CAN1_SendMessage( &MsgBuf_TX1 );
 			}
-			{STATS.COMMS = 0;}
+			STATS.COMMS = 0;
 		}
 	else if(INCREMENT || DECREMENT)
 	{
@@ -1018,7 +1014,7 @@ void _lcd_putTitle (char *_title)
 	for (;bufadd != buffer + 10; bufadd++)
 	{*bufadd = ' ';}
 
-	sprintf(spd, " %05.1fkmh ", ESC.Velocity_KMH);
+	sprintf(spd, " %5.1fkmh ", ESC.Velocity_KMH);
 
 	for (;bufadd != buffer + 20; bufadd++)
 	{

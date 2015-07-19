@@ -11,6 +11,20 @@
 #define	MENU_ITEMS 15
 #define ERROR_ITEMS 3
 
+#ifndef FLAG
+#define FLAG(x) unsigned int x :1;
+#endif // FLAG(x)
+
+struct MENUS
+{
+	void (*menus[MENU_ITEMS]) (void);
+	void (*errors[ERROR_ITEMS]) (void);
+	uint8_t MENU_POS;
+	uint8_t SUBMENU_POS;
+	uint8_t ITEM_SELECTOR;
+	FLAG(SELECTED)
+}MENU;
+
 void lcd_display_errOnStart(void);
 void lcd_display_intro(void);
 

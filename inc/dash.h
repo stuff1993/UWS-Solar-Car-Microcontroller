@@ -8,29 +8,9 @@
 #ifndef DASH_H_
 #define DASH_H_
 
-// type.h
+#include "struct.h"
 
-#ifndef NULL
-#define NULL    ((void *)0)
-#endif
-
-#ifndef FALSE
-#define FALSE   (0)
-#endif
-
-#ifndef TRUE
-#define TRUE    (1)
-#endif
-
-
-typedef enum {RESET = 0, SET = !RESET} FlagStatus, ITStatus;
-typedef enum {DISABLE = 0, ENABLE = !DISABLE} FunctionalState;
-
-// end type.h
-
-// TODO: Get actual radius
-// Reqs: Measure car
-#define WH_RADIUS_M (0.52) // metres
+#define WHEEL_D_M (0.557) // metres
 
 /// OUTPUTS
 #define BUZZER_ON		LPC_GPIO0->FIOSET = (1<<3);
@@ -106,7 +86,6 @@ typedef enum {DISABLE = 0, ENABLE = !DISABLE} FunctionalState;
 #define SPORTS_RAMP_SPEED	30
 #define REGEN_RAMP_SPEED	30
 
-#define FLAG(x) unsigned int x :1;
 #define ON		(1)
 #define OFF		(0)
 
@@ -144,7 +123,7 @@ uint32_t EE_Read(uint32_t _EEadd);
 void EE_Write(uint32_t _EEadd, uint32_t data);
 uint32_t I2C_Read(uint32_t _EEadd);
 void I2C_Write(uint32_t _EEadd, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3);
-uint32_t iirFILTER(uint32_t newDATA, uint32_t oldDATA);
+uint32_t iirFILTER(uint32_t _data_in, uint32_t _cur_data, uint8_t _gain);
 void init_GPIO(void);
 void buzzer(uint32_t val);
 void BOD_Init(void);

@@ -6,6 +6,7 @@
  */
 
 #include "lpc17xx.h"
+#include "type.h"
 #include "can.h"
 #include "dash.h"
 #include "struct.h"
@@ -144,8 +145,10 @@ void CAN_ISR_Rx1( void )
 	break;
 
 	case DASH_RQST:
+		CAN1RxDone = TRUE;
 		break;
 	case DASH_RQST + 1:
+		STATS.COMMS = 1;
 	break;
 	case DASH_RQST + 2:
 	break;
@@ -227,7 +230,7 @@ void CAN_ISR_Rx1( void )
 	break;
 	case BMU_BASE + BMU_INFO + 6:
 	BMU.Battery_V = MsgBuf_RX1.DataB / 1000; // Packet is in mV and mA
-	BMU.Battery_I = iirFILTER(MsgBuf_RX1.DataA / 1000, BMU.Battery_I);
+	BMU.Battery_I = iirFILTER(MsgBuf_RX1.DataA / 1000, BMU.Battery_I, IIR_FILTER_GAIN);
 	break;
 	case BMU_BASE + BMU_INFO + 7:
 	// Can extract 8 Status flags here but they are also contained with others in BASE + 9
@@ -267,8 +270,6 @@ void CAN_ISR_Rx1( void )
 	default:
 		break;
 	}
-
-	CAN1RxDone = TRUE;
 	LPC_CAN1->CMR = 0x4; // Release Receive Buffer
 }
 
@@ -439,8 +440,8 @@ void CAN_SetACCF_Lookup( void )
   LPC_CANAF->SFF_sa = address;
   for ( i = 0; i < ACCF_IDEN_NUM; i += 2 )
   {
-	ID_low = (i << 29) | (MPPT1_BASE_ID << 16);
-	ID_high = ((i+1) << 13) | (MPPT1_BASE_ID << 0);
+	ID_low = (i << 29) | (MPPT1_BASE << 16);
+	ID_high = ((i+1) << 13) | (MPPT1_BASE << 0);
 	*((volatile uint32_t *)(LPC_CANAF_RAM_BASE + address)) = ID_low | ID_high;
 	address += 4;
   }
@@ -638,7 +639,7 @@ void setCANBUS2(void)
 	/* Even though the filter RAM is set for all type of identifiers,
 	the test module tests explicit standard identifier only */
 	MsgBuf_TX2.Frame = 0x00080000; /* 11-bit, no RTR, DLC is 8 bytes */
-	MsgBuf_TX2.MsgID = MPPT1_BASE_ID; /* Explicit Standard ID */
+	MsgBuf_TX2.MsgID = MPPT1_BASE; /* Explicit Standard ID */
 	MsgBuf_TX2.DataA = 0x00000000;
 	MsgBuf_TX2.DataB = 0x00000000;
 

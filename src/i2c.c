@@ -1,6 +1,6 @@
 
 #include "lpc17xx.h"
-//#include "type.h"
+#include "type.h"
 #include "i2c.h"
 
 volatile uint32_t I2CMasterState[I2C_PORT_NUM] = {I2C_IDLE,I2C_IDLE,I2C_IDLE};

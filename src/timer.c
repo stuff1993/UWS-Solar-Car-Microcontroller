@@ -2,7 +2,7 @@
  *  Hardware timer initilisation routines
 ****************************************************************************/
 #include "lpc17xx.h"
-//#include "type.h"
+#include "type.h"
 #include "timer.h"
 
 volatile uint32_t timer0_m0_counter = 0;

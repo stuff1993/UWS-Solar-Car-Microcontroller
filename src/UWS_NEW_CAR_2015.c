@@ -16,17 +16,17 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "type.h"
 #include "inttofloat.h"
 #include "timer.h"
 #include "lcd.h"
 #include "pwm.h"
 #include "adc.h"
 #include "can.h"
-//#include "IAP.h"
 #include "i2c.h"
-#include "menu.h"
-#include "dash.h"
 #include "struct.h"
+#include "dash.h"
+#include "menu.h"
 
 /////////////////////////////   CAN    ////////////////////////////////
 CAN_MSG MsgBuf_TX1, MsgBuf_TX2; /* TX and RX Buffers for CAN message */
@@ -89,7 +89,6 @@ void SysTick_Handler (void)
 	CLOCK.T_mS++;
 
 	// MinorSec: DIU CAN Heartbeat
-	// TODO: Tx 0x500?
 	if (CLOCK.T_mS % 10 == 0) // Every 100 mS send heartbeat CAN packets
 	{
 		MsgBuf_TX1.Frame = 0x00080000;
@@ -104,11 +103,14 @@ void SysTick_Handler (void)
 		MsgBuf_TX1.DataB = 0x0;
 		CAN1_SendMessage( &MsgBuf_TX1 );
 
+		// TODO: Check if required
+		/*
 		MsgBuf_TX1.Frame = 0x00080000;
 		MsgBuf_TX1.MsgID = ESC_BASE + 5;
 		MsgBuf_TX1.DataA = STATS.IGNITION;
 		MsgBuf_TX1.DataB = 0x0;
 		CAN1_SendMessage( &MsgBuf_TX1 );
+		*/
 	}
 
 	// MinorSec:  Time sensitive Calculations
@@ -155,13 +157,13 @@ void menu_mppt_poll (void)
 	// Send request to MPPT
 	if((LPC_CAN2->GSR & (1 << 3)) && STATS.MPPT_POLL_COUNT)		// If previous transmission is complete, send message;
 	{
-		MsgBuf_TX2.MsgID = MPPT2_BASE_ID; 						// Explicit Standard ID
+		MsgBuf_TX2.MsgID = MPPT2_BASE; 						// Explicit Standard ID
 		CAN2_SendMessage( &MsgBuf_TX2 );
 	}
 
 	else if(LPC_CAN2->GSR & (1 << 3))							// If previous transmission is complete, send message;
 	{
-		MsgBuf_TX2.MsgID = MPPT1_BASE_ID; 						// Explicit Standard ID
+		MsgBuf_TX2.MsgID = MPPT1_BASE; 						// Explicit Standard ID
 		CAN2_SendMessage( &MsgBuf_TX2 );
 	}
 
@@ -282,10 +284,10 @@ void mppt_data_extract (MPPT *_MPPT, fakeMPPTFRAME *_fkMPPT)
 	_VOut = _VOut * 2.10;						// Scaling
 
 	// Update the global variables after IIR filtering
-	_MPPT->Tmp = iirFilter(((_Data_B & 0xFF0000) >> 16), _MPPT->Tmp, 8); //infinite impulse response filtering
-	_MPPT->VIn = iirFILTER(_VIn, _MPPT->VIn);
-	_MPPT->IIn = iirFILTER(_IIn, _MPPT->IIn);
-	_MPPT->VOut = iirFILTER(_VOut, _MPPT->VOut);
+	_MPPT->Tmp = iirFILTER(((_Data_B & 0xFF0000) >> 16), _MPPT->Tmp, 8); //infinite impulse response filtering
+	_MPPT->VIn = iirFILTER(_VIn, _MPPT->VIn, IIR_FILTER_GAIN);
+	_MPPT->IIn = iirFILTER(_IIn, _MPPT->IIn, IIR_FILTER_GAIN);
+	_MPPT->VOut = iirFILTER(_VOut, _MPPT->VOut, IIR_FILTER_GAIN);
 	if(_MPPT->Connected<2){_MPPT->Connected = 2;}
 }
 
@@ -305,7 +307,7 @@ void menu_input_check (void)
 	SWITCH_IO = 0;
 	SWITCH_IO |= (FORWARD << 0);
 	SWITCH_IO |= (REVERSE << 1);
-	SWITCH_IO |= (SPORT_MODE << 2);
+	SWITCH_IO |= (SPORTS_MODE << 2);
 	SWITCH_IO |= (LEFT_ON << 3);
 	SWITCH_IO |= (RIGHT_ON << 4);
 
@@ -375,17 +377,22 @@ void menu_input_check (void)
 **
 ** Parameters:			None
 ** Returned value:		Fault status
+** 							0 - No fault
+** 							1 - Non critical fault
+** 							2 - Critical fault - cancel drive
 **
 ******************************************************************************/
 int menu_fault_check (void)
-{
-	// TODO: menu_fault_check
+{ // TODO: POWERGOOD pin? Critical fault?
+	if (ESC.ERROR || (BMU.Status & 0xD37)){return 2;}
+	if (MPPT1.UNDV || MPPT1.OVT || MPPT2.UNDV || MPPT2.OVT || (BMU.Status & 0x1288)){return 1;}
+	return 0;
 }
 
 /******************************************************************************
 ** Function name:		menu_drive
 **
-** Description:			Reads drive inputs and
+** Description:			Reads drive inputs and configures drive packet
 **
 ** Parameters:			None
 ** Returned value:		None
@@ -396,7 +403,7 @@ void menu_drive (void)
 	uint32_t ADC_A;
 	uint32_t ADC_B;
 
-	////////////// THROTTLE ////////////////
+	/// THROTTLE
 	if(!STATS.CR_ACT)
 	{
 		ADC_A = (ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0) + ADCRead(0))/8;
@@ -407,7 +414,7 @@ void menu_drive (void)
 		if(THR_POS > 1000){THR_POS = 1000;}
 	}
 
-	////////////// REGEN ////////////////
+	/// REGEN
 	ADC_B = (ADCRead(1) + ADCRead(1) + ADCRead(1) + ADCRead(1) + ADCRead(1) + ADCRead(1) + ADCRead(1) + ADCRead(1))/8;
 
 	// Calibrate endpoints and add deadband.
@@ -419,16 +426,16 @@ void menu_drive (void)
 
 	// MinorSec: DRIVE LOGIC
 	if (!MECH_BRAKE && (FORWARD || REVERSE)){
-		if(STATS.CR_ACT){DRIVE.Current = 1.0; DRIVE.Speed_RPM = STATS.CRUISE_SPEED / ((60 * 3.14 * WH_RADIUS_M) / 1000.0);}
+		if(STATS.CR_ACT){DRIVE.Current = 1.0; DRIVE.Speed_RPM = STATS.CRUISE_SPEED / ((60 * 3.14 * WHEEL_D_M) / 1000.0);}
 		else if(!THR_POS && !RGN_POS){DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}
 		else if(FORWARD && ESC.Velocity_KMH > -5.0 && !RGN_POS && ((DRIVE.Current * 1000) < THR_POS))	{DRIVE.Speed_RPM = 1500; 	DRIVE.Current += (STATS.RAMP_SPEED / 1000.0);}
-		else if(FORWARD && ESC.Velocity_KMH > -5.0 && !RGN_POS)										{DRIVE.Speed_RPM = 1500; 	DRIVE.Current = (THR_POS / 1000.0);}
+		else if(FORWARD && ESC.Velocity_KMH > -5.0 && !RGN_POS)											{DRIVE.Speed_RPM = 1500; 	DRIVE.Current = (THR_POS / 1000.0);}
 		else if(REVERSE && ESC.Velocity_KMH < 1.0 && !RGN_POS && ((DRIVE.Current * 1000) < THR_POS))	{DRIVE.Speed_RPM = -200; 	DRIVE.Current += (STATS.RAMP_SPEED / 1000.0);}
-		else if(REVERSE && ESC.Velocity_KMH < 1.0 && !RGN_POS)										{DRIVE.Speed_RPM = -200; 	DRIVE.Current = (THR_POS / 1000.0);}
-		else if(RGN_POS && ((DRIVE.Current * 1000) < RGN_POS))				{DRIVE.Speed_RPM = 0; 		DRIVE.Current += (REGEN_RAMP_SPEED / 1000.0);}
-		else if(RGN_POS)													{DRIVE.Speed_RPM = 0; 		DRIVE.Current = (RGN_POS / 2);}
+		else if(REVERSE && ESC.Velocity_KMH < 1.0 && !RGN_POS)											{DRIVE.Speed_RPM = -200; 	DRIVE.Current = (THR_POS / 1000.0);}
+		else if(RGN_POS && ((DRIVE.Current * 1000) < RGN_POS))											{DRIVE.Speed_RPM = 0; 		DRIVE.Current += (REGEN_RAMP_SPEED / 1000.0);}
+		else if(RGN_POS)																				{DRIVE.Speed_RPM = 0; 		DRIVE.Current = (RGN_POS / 2);}
 		else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}}
-	else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;} // TODO: electronic park brake?? RPM = 0, current = 1
+	else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}
 }
 
 /******************************************************************************
@@ -466,7 +473,8 @@ void menu_lights (void)
 	if(SWITCH_IO & 0x4)	{SPORTS_ON;ECO_OFF}
 	else				{SPORTS_OFF;ECO_ON}
 
-	if(STATS.FAULT){FAULT_ON}
+	if(STATS.FAULT == 1){FAULT_ON}
+	else if(STATS.FAULT == 2 && (CLOCK.T_mS > 25 && CLOCK.T_mS < 75)){FAULT_ON}
 	else{FAULT_OFF}
 }
 
@@ -486,7 +494,7 @@ void tx500CAN (void) // TODO: Rewrite
 	 * Continue using this to send response packets
 	 *
 	 * Kill drive: use same loop to prevent drive logic running
-	 * Comm check: insert into menu loop to handle?
+	 * Comm check: flag for comms check to be picked up in menu loop
 	 *
 	 * Old power packets should be redundant if telemetry reads every CAN packet
 	 */
@@ -499,8 +507,10 @@ void tx500CAN (void) // TODO: Rewrite
 			lcd_clear();
 			char buffer[20];
 
+			sprintf(buffer, "GONEROGUE?");
+			_lcd_putTitle(buffer);
+
 			sprintf(buffer, "--   KILL DRIVE   --");
-			lcd_putstring(0,0, buffer);
 			lcd_putstring(1,0, buffer);
 			lcd_putstring(2,0, buffer);
 			lcd_putstring(3,0, buffer);
@@ -510,20 +520,8 @@ void tx500CAN (void) // TODO: Rewrite
 				buzzer(1000);
 				delayMs(1,500);
 			}
-
 			lcd_clear();
 		}
-		else if (MsgBuf_RX1.MsgID == DASH_RQST)
-		{
-			STATS.COMMS = 1;
-		}
-
-		////////////////////////////////////////////////////////////////////////////////////
-		// TODO: Remove + talk to matt about custom packet comms
-		// RPLY1 - ACK DRIVE KILL
-		// RPLY2 - COMMS CHECK RESULT
-		// RPLY3 - ACK PULL OVER REQ
-		// RPLY4 - component tmps?
 
 		// Clear Rx Buffer
 		MsgBuf_RX1.Frame = 0x0;
@@ -590,7 +588,7 @@ void recallVariables (void)
 	if(EE_Read(AddressBL) < 2000){PWMBL = EE_Read(AddressBL);}
 	else{PWMBL = 500;EE_Write(AddressBL, PWMBL);}
 
-	STATS.ODOMETER = conv_uint_float(EE_Read(AddressODOF));
+	STATS.ODOMETER = conv_uint_float(EE_Read(AddressODO));
 	STATS.MAX_SPEED = 0;
 	STATS.RAMP_SPEED = 5;
 	STATS.CRUISE_SPEED = 0;
@@ -615,7 +613,7 @@ void storeVariables (void)
 {
 	if(CLOCK.T_S % 2)
 	{
-		EE_Write(AddressODOF, conv_float_uint(STATS.ODOMETER));
+		EE_Write(AddressODO, conv_float_uint(STATS.ODOMETER));
 		delayMs(1,3);
 	}
 
@@ -738,7 +736,7 @@ void I2C_Write (uint32_t _EEadd, uint32_t data0, uint32_t data1, uint32_t data2,
 ** Returned value:		Smoothed value
 **
 ******************************************************************************/
-uint32_t iirFILTER (uint32_t _data_in, uint32_t _cur_data, uint8_t _gain = IIR_FILTER_GAIN)
+uint32_t iirFILTER (uint32_t _data_in, uint32_t _cur_data, uint8_t _gain)
 {return (((_gain-1)*_cur_data)+_data_in)/_gain;}
 
 /******************************************************************************
@@ -869,6 +867,7 @@ int main (void)
 	SysTick_Config(SystemCoreClock / 100);		// 10mS Systicker.
 
 	ADCInit(ADC_CLK);
+
 	init_GPIO();
 
 	setLCD();
@@ -896,9 +895,9 @@ int main (void)
 		DUTYBL = 1000; // TODO: No backlight on OLED
 		buzzer(700);
 
-		lcdClear();
+		lcd_clear();
 		DUTYBL = 0;
-		delay(1, 300);
+		delayMs(1, 300);
 	}
 
 	while(1) { // Exiting this loop ends the program
@@ -920,7 +919,7 @@ int main (void)
 
 		menu_mppt_poll();
 		menu_input_check();
-		menu_drive();
+		if((STATS.FAULT = menu_fault_check()) != 2){menu_drive();} // no drive on fault code 2
 		menu_lights();
 		tx500CAN();
 		menu_calc();
