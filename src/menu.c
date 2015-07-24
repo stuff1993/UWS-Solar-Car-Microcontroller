@@ -7,7 +7,14 @@
  *
  *  lcd_display_<menu>
  */
-
+// TODO: Redo menu nav. Modulus? -ves get wierd
+/*
+ * int mod (int a, int b)
+ * {
+ * 	int r = a % b;
+ * 	return r < 0 ? r + b: r;
+ * }
+ */
 #include "lpc17xx.h"
 
 #include <stdio.h>
@@ -22,7 +29,6 @@
 extern MOTORCONTROLLER ESC;
 extern MPPT MPPT1, MPPT2;
 extern CAN_MSG MsgBuf_TX1;
-extern uint16_t PWMBL;
 extern uint16_t THR_POS, RGN_POS;
 
 
@@ -44,6 +50,83 @@ void lcd_display_errOnStart (void)
 	lcd_putstring(1,0, "                    ");
 	lcd_putstring(2,0, "   GEARS ENGAGED!   ");
 	lcd_putstring(3,0, "                    ");
+}
+
+/******************************************************************************
+** Function name:		lcd_display_driver
+**
+** Description:			Boot intro screen
+**
+** Parameters:			None
+** Returned value:		None
+**
+******************************************************************************/
+void lcd_display_driver (void)
+{
+	char buffer[20], blank[2];
+
+	MENU.DRIVER = 255;
+	MENU.ITEM_SELECTOR = 0;
+	MENU.SELECTED = 0;
+
+	sprintf(buffer, "-DRIVER-");
+	_lcd_putTitle(buffer);
+
+	sprintf(buffer, "   DISPLAY    TEST  ");
+	lcd_putstring(1,0, buffer);
+
+	sprintf(buffer, "   RACE 1     RACE 2");
+	lcd_putstring(2,0, buffer);
+
+	sprintf(buffer, ">>");
+	sprintf(blank, "  ");
+
+	while(MENU.DRIVER == 255)
+	{
+		switch (MENU.ITEM_SELECTOR)
+		{
+		default:
+		case 0:
+			lcd_putstring(1,0, buffer);
+			lcd_putstring(1,10, blank);
+			lcd_putstring(2,0, blank);
+			lcd_putstring(2,10, blank);
+			break;
+		case 1:
+			lcd_putstring(1,0, blank);
+			lcd_putstring(1,10, buffer);
+			lcd_putstring(2,0, blank);
+			lcd_putstring(2,10, blank);
+			break;
+		case 2:
+			lcd_putstring(1,0, blank);
+			lcd_putstring(1,10, blank);
+			lcd_putstring(2,0, buffer);
+			lcd_putstring(2,10, blank);
+			break;
+		case 3:
+			lcd_putstring(1,0, blank);
+			lcd_putstring(1,10, blank);
+			lcd_putstring(2,0, blank);
+			lcd_putstring(2,10, buffer);
+			break;
+		}
+
+		if(SELECT)
+		{
+			MENU.DRIVER = MENU.ITEM_SELECTOR;
+		}
+		else if (INCREMENT || DECREMENT)
+		{
+			MENU.ITEM_SELECTOR += 2;
+			MENU.ITEM_SELECTOR %= 4;
+		}
+		else if (LEFT || RIGHT)
+		{
+			MENU.ITEM_SELECTOR += 1;
+			MENU.ITEM_SELECTOR %= 4;
+		}
+	}
 }
 
 /******************************************************************************
@@ -186,7 +269,7 @@ void lcd_display_home (void) // menus[2]
 	else if	(MPPT1.UNDV || MPPT1.OVT)	{sprintf(buffer, "MPPT1  FAULT        ");}
 	else if	(MPPT2.UNDV || MPPT2.OVT)	{sprintf(buffer, "MPPT2  FAULT        ");}
 	else if	(BMU.Status & 0x00001FBF)	{sprintf(buffer, "BMU  FAULT          ");}
-	else								{sprintf(buffer, "ARRAY:    %3.1f W  ", MPPT2.Watts+MPPT1.Watts);}
+	else								{sprintf(buffer, "ARRAY:    %4lu W  ", MPPT2.Watts+MPPT1.Watts);}
 	lcd_putstring(3,0, buffer);
 }
 
@@ -305,7 +388,6 @@ void lcd_display_cruise (void) // menus[4]
 
 			// Button presses
 			if (SELECT){STATS.CRUISE_SPEED = 0;STATS.CR_STS = ON;}
-			else if (INCREMENT || DECREMENT){MENU.SUBMENU_POS++;}
 		}
 	}
 	else // no cruise in reverse
@@ -346,7 +428,7 @@ void lcd_display_MPPT1(void) // menus[5]
 		sprintf(buffer, "IN: %3lu.%luV @ %2lu.%02luA ", MPPT1.VIn/10, MPPT1.VIn%10, MPPT1.IIn/100, MPPT1.IIn%100);
 		lcd_putstring(1,0, buffer);
 
-		sprintf(buffer, "OUT:%3lu.%luV @ %3.1fW ", MPPT1.VOut/10, MPPT1.VOut%10, MPPT1.Watts);
+		sprintf(buffer, "OUT:%3lu.%luV @ %4luW ", MPPT1.VOut/10, MPPT1.VOut%10, MPPT1.Watts);
 		lcd_putstring(2,0, buffer);
 
 		sprintf(buffer, "%2lu%cC", MPPT1.Tmp, 0xB2);
@@ -404,7 +486,7 @@ void lcd_display_MPPT2(void) // menus[6]
 		sprintf(buffer, "IN: %3lu.%luV @ %2lu.%02luA ", MPPT2.VIn/10, MPPT2.VIn%10, MPPT2.IIn/100, MPPT2.IIn%100);
 		lcd_putstring(1,0, buffer);
 
-		sprintf(buffer, "OUT:%3lu.%luV @ %3.1fW ", MPPT2.VOut/10, MPPT2.VOut%10, MPPT2.Watts);
+		sprintf(buffer, "OUT:%3lu.%luV @ %4luW ", MPPT2.VOut/10, MPPT2.VOut%10, MPPT2.Watts);
 		lcd_putstring(2,0, buffer);
 
 		sprintf(buffer, "%2lu%cC", MPPT2.Tmp, 0xB2);
@@ -516,7 +598,7 @@ void lcd_display_motor (void) // menus[8]
 		sprintf(buffer, "%.1fAp @ %.1fWp ", ESC.MAX_Bus_I, ESC.MAX_Watts);
 		lcd_putstring(1,0, buffer);
 
-		sprintf(buffer, "%.1fVp");
+		sprintf(buffer, "%.1fVp", ESC.MAX_Bus_V);
 		lcd_putstring(2,0, buffer);
 
 		if (SELECT)
@@ -529,7 +611,7 @@ void lcd_display_motor (void) // menus[8]
 		}
 		break;
 	}
-	sprintf(buffer, "");
+	sprintf(buffer, "                    ");
 	lcd_putstring(3,0, buffer);
 
 	if(INCREMENT){MENU.SUBMENU_POS++;}
@@ -553,13 +635,13 @@ void lcd_display_debug (void) // menus[9]
 	sprintf(buffer, "-DEBUG-");
 	_lcd_putTitle(buffer);
 
-	sprintf(buffer, "BUS E: %.1f Whrs ", BMU.WattHrs);
+	sprintf(buffer, "BUS E: %4.1f Whrs  ", BMU.WattHrs);
 	lcd_putstring(1,0, buffer);
 
-	sprintf(buffer, "BUS I: %.1f Amps ", BMU.Battery_I);
+	sprintf(buffer, "BUS I: %3lu Amps     ", BMU.Battery_I);
 	lcd_putstring(2,0, buffer);
 
-	sprintf(buffer, "BUS P: %.1f Watts", BMU.Watts);
+	sprintf(buffer, "BUS P: %4lu Watts   ", BMU.Watts);
 	lcd_putstring(3,0, buffer);
 
 	if(SELECT && INCREMENT)
@@ -628,20 +710,20 @@ void lcd_display_errors (void) // menus[10]
 
 
 /******************************************************************************
-** Function name:		lcd_display_other
+** Function name:		lcd_display_options
 **
 ** Description:			Other options on this screen.
-** 						Buzzer and backlight settings
+** 						Buzzer and driver settings
 **
 ** Parameters:			None
 ** Returned value:		None
 **
 ******************************************************************************/
-void lcd_display_other (void) // menus[11]
-{
+void lcd_display_options (void) // menus[11]
+{ // TODO: Redo for no backlight
 	char buffer[20];
 
-	sprintf(buffer, "-OTHER-");
+	sprintf(buffer, "-OPTIONS-");
 	_lcd_putTitle(buffer);
 
 	if (MENU.SELECTED || (CLOCK.T_S%2))
@@ -653,38 +735,31 @@ void lcd_display_other (void) // menus[11]
 			/* no break */
 		case 0:
 			if(STATS.BUZZER){
-				sprintf(buffer, ">> STATS.BUZZER:        ON");
+				sprintf(buffer, ">> BUZZER:     ON   ");
 				lcd_putstring(2,0, buffer);}
 			else{
-				sprintf(buffer, ">> STATS.BUZZER:       OFF");
+				sprintf(buffer, ">> BUZZER:    OFF   ");
 				lcd_putstring(2,0, buffer);}
-			sprintf(buffer, "   BACKLIGHT:    %03d", PWMBL/10);
-			lcd_putstring(3,0, buffer);
 			break;
 		case 1:
 			if(STATS.BUZZER){
-				sprintf(buffer, "   STATS.BUZZER:        ON");
+				sprintf(buffer, "   BUZZER:     ON   ");
 				lcd_putstring(2,0, buffer);}
 			else{
-				sprintf(buffer, "   STATS.BUZZER:       OFF");
+				sprintf(buffer, "   BUZZER:    OFF   ");
 				lcd_putstring(2,0, buffer);}
-			sprintf(buffer, ">> BACKLIGHT:    %03d", PWMBL/10);
-			lcd_putstring(3,0, buffer);
 			break;
 		}
 	}
 	else
 	{
 		if(STATS.BUZZER){
-			sprintf(buffer, "   STATS.BUZZER:        ON");
+			sprintf(buffer, "   BUZZER:     ON   ");
 			lcd_putstring(2,0, buffer);}
 		else{
-			sprintf(buffer, "   STATS.BUZZER:       OFF");
+			sprintf(buffer, "   BUZZER:    OFF   ");
 			lcd_putstring(2,0, buffer);}
-		sprintf(buffer, "   BACKLIGHT:    %03d", PWMBL/10);
-		lcd_putstring(3,0, buffer);
 	}
-	////////////////////////////////////////////////////////////////////////
 
 	/////////////////////////////   ACTIONS   //////////////////////////////
 	if(MENU.SELECTED)
@@ -698,7 +773,6 @@ void lcd_display_other (void) // menus[11]
 				EE_Write(AddressBUZZ, STATS.BUZZER);
 				break;
 			case 1:
-				EE_Write(AddressBL, PWMBL);
 				break;
 			}
 
@@ -712,9 +786,6 @@ void lcd_display_other (void) // menus[11]
 				else{BUZZER_ON}
 				break;
 			case 1:
-				if(PWMBL > 1000){PWMBL += 10;}
-				else if (PWMBL >= 1000){PWMBL = 1000;buzzer(200);}
-				DUTYBL = PWMBL;
 				break;
 			default:
 				break;
@@ -729,9 +800,6 @@ void lcd_display_other (void) // menus[11]
 				else{BUZZER_ON}
 				break;
 			case 1:
-				if(PWMBL > 0){PWMBL -= 10;}
-				else if(PWMBL <= 0){PWMBL = 0;buzzer(200);}
-				DUTYBL = PWMBL;
 				break;
 			default:
 				break;
@@ -744,18 +812,12 @@ void lcd_display_other (void) // menus[11]
 		else if(INCREMENT)
 		{
 			MENU.ITEM_SELECTOR++;
-			if(MENU.ITEM_SELECTOR > 1)
-			{
-				MENU.ITEM_SELECTOR = 0;
-			}
+			MENU.ITEM_SELECTOR %= 2
 		}
 		else if(DECREMENT)
 		{
 			MENU.ITEM_SELECTOR--;
-			if(MENU.ITEM_SELECTOR < 0)
-			{
-				MENU.ITEM_SELECTOR = 1;
-			}
+			MENU.ITEM_SELECTOR %= 2
 		}
 	}
 }
@@ -779,7 +841,7 @@ void lcd_display_peaks (void) // menus[12]
 	sprintf(buffer, "-DATA PKS-");
 	_lcd_putTitle(buffer);
 
-	sprintf(buffer, "ARRAY: %.1f Watts  ", MPPT1.MAX_Watts + MPPT2.MAX_Watts);
+	sprintf(buffer, "ARRAY: %4lu Watts  ", MPPT1.MAX_Watts + MPPT2.MAX_Watts);
 	lcd_putstring(2,0, buffer);
 
 	sprintf(buffer, "TOP SPD: %3.1f kmh  ", STATS.MAX_SPEED);
@@ -834,7 +896,7 @@ void lcd_display_odometer (void) // menus[14]
 	sprintf(buffer, "-ODOMETER-");
 	_lcd_putTitle(buffer);
 
-	sprintf(buffer, "CAR: %.5f KM   ", STATS.ODOMETER);
+	sprintf(buffer, "CAR: %.5f KM   ", STATS.ODOMETER); // TODO: Check string formats for float
 	lcd_putstring(2,0, buffer);
 
 	sprintf(buffer, "ESC: %.5f KM   ", ESC.Odometer);
@@ -943,7 +1005,7 @@ void lcd_display_HWOC (void) // errors[1]
 ** Returned value:		None
 **
 ******************************************************************************/
-void lcd_display_COMMS (void)
+void lcd_display_COMMS (void) // errors[2]
 {
 	char buffer[20];
 	sprintf(buffer, "-COMMS-");
@@ -1038,22 +1100,66 @@ void menuInit (void)
 {
 	MENU.errors[0] = lcd_display_SWOC;
 	MENU.errors[1] = lcd_display_HWOC;
+	MENU.errors[2] = lcd_display_COMMS;
 
-	MENU.menus[0] = lcd_display_info;
-	MENU.menus[1] = lcd_display_escBus;
-	MENU.menus[2] = lcd_display_home;
-	MENU.menus[3] = lcd_display_drive;
-	MENU.menus[4] = lcd_display_cruise;
-	MENU.menus[5] = lcd_display_MPPT1;
-	MENU.menus[6] = lcd_display_MPPT2;
-	MENU.menus[7] = lcd_display_MPPTPower;
-	MENU.menus[8] = lcd_display_motor;
-	MENU.menus[9] = lcd_display_debug;
-	MENU.menus[10] = lcd_display_errors;
-	MENU.menus[11] = lcd_display_other;
-	MENU.menus[12] = lcd_display_peaks;
-	MENU.menus[13] = lcd_display_runtime;
-	MENU.menus[14] = lcd_display_odometer;
-
-	MENU.MENU_POS = 1; // Initial menu screen
+	switch (MENU.DRIVER)
+	{
+	default:
+	case 0: // DISPLAY
+		MENU.ACTUAL_ITEMS = 11;
+		MENU.menus[0] = lcd_display_info;
+		MENU.menus[1] = lcd_display_home;
+		MENU.menus[2] = lcd_display_drive;
+		MENU.menus[3] = lcd_display_MPPT1;
+		MENU.menus[4] = lcd_display_MPPT2;
+		MENU.menus[5] = lcd_display_MPPTPower;
+		MENU.menus[6] = lcd_display_motor;
+		MENU.menus[7] = lcd_display_options;
+		MENU.menus[8] = lcd_display_peaks;
+		MENU.menus[9] = lcd_display_runtime;
+		MENU.menus[10] = lcd_display_odometer;
+		MENU.MENU_POS = 1; // Initial menu screen
+		break;
+	case 1: // TEST
+		MENU.ACTUAL_ITEMS = 15;
+		MENU.menus[0] = lcd_display_info;
+		MENU.menus[1] = lcd_display_escBus;
+		MENU.menus[2] = lcd_display_home;
+		MENU.menus[3] = lcd_display_drive;
+		MENU.menus[4] = lcd_display_cruise;
+		MENU.menus[5] = lcd_display_MPPT1;
+		MENU.menus[6] = lcd_display_MPPT2;
+		MENU.menus[7] = lcd_display_MPPTPower;
+		MENU.menus[8] = lcd_display_motor;
+		MENU.menus[9] = lcd_display_debug;
+		MENU.menus[10] = lcd_display_errors;
+		MENU.menus[11] = lcd_display_options;
+		MENU.menus[12] = lcd_display_peaks;
+		MENU.menus[13] = lcd_display_runtime;
+		MENU.menus[14] = lcd_display_odometer;
+		MENU.MENU_POS = 2; // Initial menu screen
+		break;
+	case 2: // RACE 1
+		MENU.ACTUAL_ITEMS = 7;
+		MENU.menus[0] = lcd_display_home;
+		MENU.menus[1] = lcd_display_drive;
+		MENU.menus[2] = lcd_display_cruise;
+		MENU.menus[3] = lcd_display_errors;
+		MENU.menus[4] = lcd_display_options;
+		MENU.menus[5] = lcd_display_runtime;
+		MENU.menus[6] = lcd_display_odometer;
+		MENU.MENU_POS = 0; // Initial menu screen
+		break;
+	case 3: // RACE 2
+		MENU.ACTUAL_ITEMS = 7;
+		MENU.menus[0] = lcd_display_home;
+		MENU.menus[1] = lcd_display_drive;
+		MENU.menus[2] = lcd_display_cruise;
+		MENU.menus[3] = lcd_display_errors;
+		MENU.menus[4] = lcd_display_options;
+		MENU.menus[5] = lcd_display_runtime;
+		MENU.menus[6] = lcd_display_odometer;
+		MENU.MENU_POS = 0; // Initial menu screen
+		break;
+	}
 }

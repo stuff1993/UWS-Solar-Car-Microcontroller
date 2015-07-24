@@ -86,12 +86,14 @@
 #define SPORTS_RAMP_SPEED	30
 #define REGEN_RAMP_SPEED	30
 
+#define MAX_REGEN			200
+
 #define ON		(1)
 #define OFF		(0)
 
 /// EEPROM Addresses ///
 #define AddressBUZZ 	0
-#define AddressBL 		4
+#define AddressBL 		4 // Trip ODO for kieran
 #define AddressODO		8
 #define AddressMPPT1WHR	12
 #define AddressBMUWHR	16
@@ -115,7 +117,7 @@ void menu_input_check(void);
 int menu_fault_check(void);
 void menu_drive(void);
 void menu_lights(void);
-void tx500CAN(void);
+void menu_can_handler(void);
 void menu_calc(void);
 void recallVariables(void);
 void storeVariables(void);

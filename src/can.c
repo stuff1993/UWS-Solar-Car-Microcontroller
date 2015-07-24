@@ -59,6 +59,7 @@ void CAN_ISR_Rx1( void )
 	case ESC_BASE + 1:
 #if _MC_ERR
 	ESC.ERROR = (MsgBuf_RX1.DataA >> 16);
+	if(ESC.ERROR){CAN1RxDone = TRUE;NEUTRAL_ON;REVERSE_ON;DRIVE_ON;REGEN_ON;}
 #endif
 #if _MC_LIM
 	ESC.LIMIT = (MsgBuf_RX1.DataA & 0xFFFF);

@@ -19,13 +19,16 @@ struct MENUS
 {
 	void (*menus[MENU_ITEMS]) (void);
 	void (*errors[ERROR_ITEMS]) (void);
-	uint8_t MENU_POS;
-	uint8_t SUBMENU_POS;
-	uint8_t ITEM_SELECTOR;
+	uint8_t DRIVER;
+	uint8_t ACTUAL_ITEMS;
+	int8_t MENU_POS;
+	int8_t SUBMENU_POS;
+	int8_t ITEM_SELECTOR;
 	FLAG(SELECTED)
 }MENU;
 
 void lcd_display_errOnStart(void);
+void lcd_display_driver(void);
 void lcd_display_intro(void);
 
 void lcd_display_info(void);
@@ -39,7 +42,7 @@ void lcd_display_MPPTPower(void);
 void lcd_display_motor(void);
 void lcd_display_debug(void);
 void lcd_display_errors(void);
-void lcd_display_other(void);
+void lcd_display_options(void);
 void lcd_display_peaks(void);
 void lcd_display_runtime(void);
 void lcd_display_odometer(void);

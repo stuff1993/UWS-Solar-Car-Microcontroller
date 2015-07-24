@@ -20,7 +20,6 @@
 #include "inttofloat.h"
 #include "timer.h"
 #include "lcd.h"
-#include "pwm.h"
 #include "adc.h"
 #include "can.h"
 #include "i2c.h"
@@ -46,8 +45,6 @@ volatile unsigned char SWITCH_IO	= 0;
 uint16_t THR_POS = 0;
 uint16_t RGN_POS = 0;
 
-uint16_t PWMBL 	= 0;
-
 /// MPPTs
 MPPT MPPT1;
 MPPT MPPT2;
@@ -70,8 +67,6 @@ MOTORCONTROLLER ESC;
 ******************************************************************************/
 void BOD_IRQHandler (void)
 {
-	DUTYBL = 0;
-
 	REVERSE_ON;NEUTRAL_ON;REGEN_ON;DRIVE_ON;FAULT_ON;ECO_ON;SPORTS_ON;
 }
 
@@ -94,7 +89,8 @@ void SysTick_Handler (void)
 		MsgBuf_TX1.Frame = 0x00080000;
 		MsgBuf_TX1.MsgID = ESC_BASE + 1;
 		MsgBuf_TX1.DataA = conv_float_uint(DRIVE.Speed_RPM);
-		MsgBuf_TX1.DataB = conv_float_uint(DRIVE.Current);
+		if(DRIVE.Current < 0){MsgBuf_TX1.DataB = conv_float_uint(DRIVE.Current * -1.0);}
+		else{MsgBuf_TX1.DataB = conv_float_uint(DRIVE.Current);}
 		CAN1_SendMessage( &MsgBuf_TX1 );
 
 		MsgBuf_TX1.Frame = 0x00080000;
@@ -244,7 +240,7 @@ void menu_mppt_poll (void)
 /******************************************************************************
 ** Function name:		mppt_data_extract
 **
-** Description:			Extracts data from CAN 2 Receive buffer into MPPT structure.
+** Description:			Extracts data from CAN 2 Rx buffer into MPPT structure.
 **
 ** Parameters:			1. Address of MPPT to extract to
 ** 						2. Address of fakeMPPT to use for retransmit
@@ -316,7 +312,7 @@ void menu_input_check (void)
 	if(RIGHT)
 	{
 		MENU.MENU_POS++;delayMs(1, 400);buzzer(50);
-		if(MENU.MENU_POS>=MENU_ITEMS){MENU.MENU_POS = 0;}
+		MENU.MENU_POS %= MENU.ACTUAL_ITEMS;
 		if(MENU.MENU_POS==1){buzzer(300);}
 		if((ESC.ERROR & 0x2) && !STATS.SWOC_ACK){STATS.SWOC_ACK = TRUE;}
 		if((ESC.ERROR & 0x1) && !STATS.HWOC_ACK){STATS.HWOC_ACK = TRUE;BUZZER_OFF}
@@ -342,7 +338,7 @@ void menu_input_check (void)
 	if(LEFT)
 	{
 		MENU.MENU_POS--;delayMs(1, 400);buzzer(50);
-		if(MENU.MENU_POS<0){MENU.MENU_POS = MENU_ITEMS - 1;}
+		MENU.MENU_POS %= MENU.ACTUAL_ITEMS;
 		if(MENU.MENU_POS==1){buzzer(300);}
 		if((ESC.ERROR & 0x2) && !STATS.SWOC_ACK){STATS.SWOC_ACK = TRUE;}
 		if((ESC.ERROR & 0x1) && !STATS.HWOC_ACK){STATS.HWOC_ACK = TRUE;BUZZER_OFF}
@@ -383,7 +379,7 @@ void menu_input_check (void)
 **
 ******************************************************************************/
 int menu_fault_check (void)
-{ // TODO: POWERGOOD pin? Critical fault?
+{ // TODO: POWERGOOD pin? Critical fault? Trigger interrupt on falling edge, 12v wil be dropping ie no can
 	if (ESC.ERROR || (BMU.Status & 0xD37)){return 2;}
 	if (MPPT1.UNDV || MPPT1.OVT || MPPT2.UNDV || MPPT2.OVT || (BMU.Status & 0x1288)){return 1;}
 	return 0;
@@ -421,19 +417,21 @@ void menu_drive (void)
 	RGN_POS = (ADC_B - 1660);
 	RGN_POS = (RGN_POS * 9)/10;
 	if(RGN_POS < 0){RGN_POS = 0;}
-	if(RGN_POS > 1000){RGN_POS = 1000;}
+	if(RGN_POS > MAX_REGEN){RGN_POS = MAX_REGEN;}
 	if(RGN_POS){STATS.CR_ACT = OFF;}
 
 	// MinorSec: DRIVE LOGIC
 	if (!MECH_BRAKE && (FORWARD || REVERSE)){
-		if(STATS.CR_ACT){DRIVE.Current = 1.0; DRIVE.Speed_RPM = STATS.CRUISE_SPEED / ((60 * 3.14 * WHEEL_D_M) / 1000.0);}
-		else if(!THR_POS && !RGN_POS){DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}
+		if(STATS.CR_ACT)																				{DRIVE.Current = 1.0; DRIVE.Speed_RPM = STATS.CRUISE_SPEED / ((60 * 3.14 * WHEEL_D_M) / 1000.0);}
+		else if(!THR_POS && !RGN_POS)																	{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}
+		else if(RGN_POS && DRIVE.Current > 0)															{DRIVE.Current = 0;}
+		else if(RGN_POS && ((DRIVE.Current * 1000) < RGN_POS))											{DRIVE.Speed_RPM = 0; 		DRIVE.Current += (REGEN_RAMP_SPEED / 1000.0);}
+		else if(RGN_POS)																				{DRIVE.Speed_RPM = 0; 		DRIVE.Current = (RGN_POS / 2);}
+		else if(THR_POS && DRIVE.Current < 0)															{DRIVE.Current = 0;}
 		else if(FORWARD && ESC.Velocity_KMH > -5.0 && !RGN_POS && ((DRIVE.Current * 1000) < THR_POS))	{DRIVE.Speed_RPM = 1500; 	DRIVE.Current += (STATS.RAMP_SPEED / 1000.0);}
 		else if(FORWARD && ESC.Velocity_KMH > -5.0 && !RGN_POS)											{DRIVE.Speed_RPM = 1500; 	DRIVE.Current = (THR_POS / 1000.0);}
 		else if(REVERSE && ESC.Velocity_KMH < 1.0 && !RGN_POS && ((DRIVE.Current * 1000) < THR_POS))	{DRIVE.Speed_RPM = -200; 	DRIVE.Current += (STATS.RAMP_SPEED / 1000.0);}
 		else if(REVERSE && ESC.Velocity_KMH < 1.0 && !RGN_POS)											{DRIVE.Speed_RPM = -200; 	DRIVE.Current = (THR_POS / 1000.0);}
-		else if(RGN_POS && ((DRIVE.Current * 1000) < RGN_POS))											{DRIVE.Speed_RPM = 0; 		DRIVE.Current += (REGEN_RAMP_SPEED / 1000.0);}
-		else if(RGN_POS)																				{DRIVE.Speed_RPM = 0; 		DRIVE.Current = (RGN_POS / 2);}
 		else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}}
 	else{DRIVE.Speed_RPM = 0; DRIVE.Current = 0;}
 }
@@ -479,24 +477,22 @@ void menu_lights (void)
 }
 
 /******************************************************************************
-** Function name:		tx500CAN
+** Function name:		menu_can_handler
 **
-** Description:			Sends requested packets on 500K CAN Bus
+** Description:			Handles custom CAN packets that aren't handled in can.c
 **
 ** Parameters:			None
 ** Returned value:		None
 **
 ******************************************************************************/
-void tx500CAN (void) // TODO: Rewrite
+void menu_can_handler (void)
 {
 	/*
-	 * Handle custom packets in can.c, flag incoming flag type to check here.
-	 * Continue using this to send response packets
+	 * Flag receipt of custom packets requiring extra handling in can.c
+	 * Check flags and handle here
 	 *
-	 * Kill drive: use same loop to prevent drive logic running
-	 * Comm check: flag for comms check to be picked up in menu loop
-	 *
-	 * Old power packets should be redundant if telemetry reads every CAN packet
+	 * Kill drive - 0x510: use loop to prevent drive logic running. Not done in can.c to release Rx buffer
+	 * SWOC Error - 0x401: Send MC reset packet
 	 */
 	if ( CAN1RxDone == TRUE )
 	{
@@ -507,13 +503,25 @@ void tx500CAN (void) // TODO: Rewrite
 			lcd_clear();
 			char buffer[20];
 
-			sprintf(buffer, "GONEROGUE?");
-			_lcd_putTitle(buffer);
-
-			sprintf(buffer, "--   KILL DRIVE   --");
-			lcd_putstring(1,0, buffer);
-			lcd_putstring(2,0, buffer);
-			lcd_putstring(3,0, buffer);
+			if(MENU.DRIVER == 3)
+			{
+				sprintf(buffer, "-DICKDICK-");
+				_lcd_putTitle(buffer);
+				sprintf(buffer, "                    ");
+				lcd_putstring(1,0, buffer);
+				sprintf(buffer, "%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c", 0x00, 0x02, 0x04, 0x04, 0x05, 0x00, 0x02, 0x04, 0x04, 0x05, 0x00, 0x02, 0x04, 0x04, 0x05, 0x00, 0x02, 0x04, 0x04, 0x05);
+				lcd_putstring(2,0, buffer);
+				sprintf(buffer, "%c%c   %c%c   %c%c   %c%c   ", 0x01, 0x03, 0x01, 0x03, 0x01, 0x03, 0x01, 0x03);
+			}
+			else
+			{
+				sprintf(buffer, "-KILLDRVE-");
+				_lcd_putTitle(buffer);
+				sprintf(buffer, "--   KILL DRIVE   --");
+				lcd_putstring(1,0, buffer);
+				lcd_putstring(2,0, buffer);
+				lcd_putstring(3,0, buffer);
+			}
 
 			while(FORWARD || REVERSE)
 			{
@@ -521,6 +529,19 @@ void tx500CAN (void) // TODO: Rewrite
 				delayMs(1,500);
 			}
 			lcd_clear();
+		}
+		else if (MsgBuf_RX1.MsgID == ESC_BASE + 1)
+		{
+			if(ESC.ERROR == 0x2)
+			{
+				MsgBuf_TX1.Frame = 0x00080000; 		// 11-bit, no RTR, DLC is 8 bytes
+				MsgBuf_TX1.MsgID = 0x503; 			// Explicit Standard ID
+				MsgBuf_TX1.DataB = 0x0;
+				MsgBuf_TX1.DataA = 0x0;
+				CAN1_SendMessage( &MsgBuf_TX1 );
+				buzzer(100);
+				NEUTRAL_OFF;REVERSE_OFF;DRIVE_OFF;REGEN_OFF;
+			}
 		}
 
 		// Clear Rx Buffer
@@ -584,9 +605,6 @@ void recallVariables (void)
 {
 	// Restore Non-Volatile Data
 	STATS.BUZZER = EE_Read(AddressBUZZ);
-
-	if(EE_Read(AddressBL) < 2000){PWMBL = EE_Read(AddressBL);}
-	else{PWMBL = 500;EE_Write(AddressBL, PWMBL);}
 
 	STATS.ODOMETER = conv_uint_float(EE_Read(AddressODO));
 	STATS.MAX_SPEED = 0;
@@ -875,13 +893,12 @@ int main (void)
 
 	I2C1Init();
 
-	PWM_Init(1, 1300);		//1300 PWM steps. 1000/1300 gives roughly 5volts on the A-OUT Ports.
-	PWM_Start(1);
-
 	setCANBUS1();
 	setCANBUS2();
 
 	BOD_Init();
+
+	lcd_display_driver();
 
 	lcd_display_intro();
 
@@ -892,18 +909,16 @@ int main (void)
 	while (FORWARD || REVERSE)
 	{
 		lcd_display_errOnStart();
-		DUTYBL = 1000; // TODO: No backlight on OLED
 		buzzer(700);
 
 		lcd_clear();
-		DUTYBL = 0;
 		delayMs(1, 300);
 	}
 
 	while(1) { // Exiting this loop ends the program
-		if((ESC.ERROR & 0x2) && !STATS.SWOC_ACK) // on unacknowledged SWOC error, show error screen
-		{MENU.errors[0]();}
-		else if ((ESC.ERROR & 0x1) && !STATS.HWOC_ACK) // on unacknowledged SWOC error, show error screen
+		//if((ESC.ERROR & 0x2) && !STATS.SWOC_ACK) // on unacknowledged SWOC error, show error screen
+		//{MENU.errors[0]();}
+		if ((ESC.ERROR & 0x1) && !STATS.HWOC_ACK) // on unacknowledged SWOC error, show error screen
 		{MENU.errors[1]();}
 		else if (STATS.COMMS)
 		{MENU.errors[2]();}
@@ -921,7 +936,7 @@ int main (void)
 		menu_input_check();
 		if((STATS.FAULT = menu_fault_check()) != 2){menu_drive();} // no drive on fault code 2
 		menu_lights();
-		tx500CAN();
+		menu_can_handler();
 		menu_calc();
     }
 
